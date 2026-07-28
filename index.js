@@ -22,47 +22,133 @@ global.generateProfilePicture = generateProfilePicture;
 global.downloadMediaMessage = downloadMediaMessage;
 global.bannedChats = global.bannedChats || [];
 
-// ===== SESSION_ID TO CREDS.JSON =====
+// ============================================================
+//  SESSION HANDLER - Inakubali SESSION_ID (Base64) na CREDS.JSON
+// ============================================================
 const SESSION_DIR = './session';
 const CREDS_PATH = path.join(SESSION_DIR, 'creds.json');
 
+// Create session folder
 if (!fs.existsSync(SESSION_DIR)) {
     fs.mkdirSync(SESSION_DIR, { recursive: true });
 }
 
-if (process.env.SESSION_ID && !fs.existsSync(CREDS_PATH)) {
+// ===== FUNCTION: RESTORE SESSION FROM SESSION_ID =====
+function restoreSessionFromId(sessionId) {
     try {
         let sessionData;
+        let isBase64 = false;
+        
+        // Jaribu ku-parse kama JSON moja kwa moja
         try {
-            sessionData = JSON.parse(process.env.SESSION_ID);
+            sessionData = JSON.parse(sessionId);
+            console.log('Session parsed as JSON directly');
         } catch (e) {
+            // Kama haifai, jaribu Base64 decode
             try {
-                const decoded = Buffer.from(process.env.SESSION_ID, 'base64').toString('utf-8');
+                const decoded = Buffer.from(sessionId, 'base64').toString('utf-8');
                 sessionData = JSON.parse(decoded);
+                isBase64 = true;
+                console.log('Session decoded from Base64');
             } catch (e2) {
-                console.error('Invalid SESSION_ID format. Provide valid JSON.');
-                process.exit(1);
+                // Jaribu ku-parse kama string na ku-validate
+                try {
+                    // Angalia kama ni JSON valid
+                    const test = JSON.parse(sessionId);
+                    if (test && typeof test === 'object') {
+                        sessionData = test;
+                        console.log('Session parsed as JSON object');
+                    }
+                } catch (e3) {
+                    console.error('Invalid SESSION_ID format. Not JSON or Base64.');
+                    return false;
+                }
             }
         }
+        
+        // Validate session data
+        if (!sessionData || typeof sessionData !== 'object') {
+            console.error('Invalid session data: not an object');
+            return false;
+        }
+        
+        // Check for required fields
+        if (!sessionData.noiseKey && !sessionData.creds) {
+            console.warn('Session may be incomplete (missing noiseKey or creds)');
+        }
+        
+        // Write to file
         fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
-        console.log('Session restored from SESSION_ID');
-    } catch (err) {
-        console.error('Error restoring session from SESSION_ID:', err);
+        console.log('Session restored successfully from SESSION_ID' + (isBase64 ? ' (Base64)' : ''));
+        return true;
+        
+    } catch (error) {
+        console.error('Error restoring session:', error.message);
+        return false;
     }
-} else if (fs.existsSync(CREDS_PATH)) {
-    console.log('Using existing session from creds.json');
 }
 
-if (!fs.existsSync(CREDS_PATH) && global.sessionid) {
+// ===== FUNCTION: RESTORE SESSION FROM CREDS.JSON =====
+function restoreSessionFromFile() {
+    try {
+        if (fs.existsSync(CREDS_PATH)) {
+            const data = fs.readFileSync(CREDS_PATH, 'utf8');
+            if (data && data.length > 50) {
+                const sessionData = JSON.parse(data);
+                if (sessionData && typeof sessionData === 'object') {
+                    console.log('Session loaded from creds.json file');
+                    return true;
+                }
+            }
+        }
+        return false;
+    } catch (error) {
+        console.error('Error reading creds.json:', error.message);
+        return false;
+    }
+}
+
+// ===== MAIN SESSION RESTORATION =====
+let sessionRestored = false;
+
+// 1. Try SESSION_ID from environment
+if (process.env.SESSION_ID && process.env.SESSION_ID.length > 10) {
+    console.log('Found SESSION_ID in environment variables');
+    if (!fs.existsSync(CREDS_PATH) || fs.statSync(CREDS_PATH).size < 100) {
+        sessionRestored = restoreSessionFromId(process.env.SESSION_ID);
+    } else {
+        console.log('Using existing creds.json (SESSION_ID ignored)');
+        sessionRestored = true;
+    }
+}
+
+// 2. If SESSION_ID failed, try creds.json
+if (!sessionRestored) {
+    sessionRestored = restoreSessionFromFile();
+}
+
+// 3. If still not restored, try global.sessionid (legacy)
+if (!sessionRestored && global.sessionid) {
     try {
         const sessionData = JSON.parse(global.sessionid);
         fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
+        sessionRestored = true;
         console.log('Session restored from global.sessionid');
     } catch (err) {
-        console.error('Error restoring session from global.sessionid:', err);
+        console.error('Error restoring from global.sessionid:', err.message);
     }
 }
 
+// 4. Final check
+if (!sessionRestored) {
+    console.log('No session found. Bot will start with QR code.');
+} else {
+    console.log('Session ready. Bot will connect automatically.');
+}
+
+// ============================================================
+//  BOT CONFIGURATION
+// ============================================================
 const AUTH_FOLDER = './session';
 const PLUGIN_FOLDER = './plugins';
 const PORT = process.env.PORT || 3000;
@@ -75,6 +161,9 @@ let sock = null;
 let isConnecting = false;
 let welcomeSent = false;
 
+// ============================================================
+//  LOAD PREFIX
+// ============================================================
 function loadPrefix() {
     const configPath = path.join(__dirname, 'config.json');
     if (fs.existsSync(configPath)) {
@@ -88,9 +177,16 @@ function loadPrefix() {
             console.error('Error loading config:', err);
         }
     }
+    if (!global.BOT_PREFIX) {
+        global.BOT_PREFIX = '.';
+        console.log('Using default prefix: .');
+    }
     startBot();
 }
 
+// ============================================================
+//  SEND WELCOME MESSAGE
+// ============================================================
 async function sendWelcomeMessage() {
     if (welcomeSent) return;
     if (!sock) return;
@@ -153,12 +249,15 @@ Panel & Server Available.
             }
         });
         welcomeSent = true;
-        console.log('Welcome message sent');
+        console.log('Welcome message sent successfully');
     } catch (err) {
         console.error('Welcome message error:', err);
     }
 }
 
+// ============================================================
+//  START BOT
+// ============================================================
 function startBot() {
     console.log('Starting WhatsApp Bot...');
     isConnecting = true;
@@ -258,7 +357,7 @@ function startBot() {
 
                     setTimeout(async () => {
                         await sendWelcomeMessage();
-                    }, 2000);
+                    }, 3000);
                 } 
                 
                 else if (connection === 'connecting') {
@@ -272,6 +371,7 @@ function startBot() {
                 console.log('Credentials updated');
             });
 
+            // ===== LOAD PLUGINS =====
             const plugins = new Map();
             const pluginPath = path.join(__dirname, PLUGIN_FOLDER);
             
@@ -299,8 +399,11 @@ function startBot() {
                 } catch (error) {
                     console.error('Error loading plugins:', error);
                 }
+            } else {
+                console.log('No plugins folder found');
             }
            
+            // ===== MESSAGES HANDLER =====
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
                 if (type !== 'notify' && type !== 'append') return;
                 
@@ -369,6 +472,7 @@ function startBot() {
                 }
             });
             
+            // ===== GROUP PARTICIPANTS =====
             sock.ev.on('group-participants.update', async (update) => {
                 try {
                     if (!global.welcomeConfig?.enabled) return
@@ -416,11 +520,14 @@ function startBot() {
     })();
 }
 
+// ============================================================
+//  HTTP SERVER
+// ============================================================
 const server = http.createServer((req, res) => {
     const url = req.url;
     const PUBLIC_DIR = path.join(__dirname, 'public');
     
-    // Serve index.html for root
+    // Serve index.html
     if (url === '/' || url === '/index.html') {
         const indexPath = path.join(PUBLIC_DIR, 'index.html');
         if (fs.existsSync(indexPath)) {
@@ -433,15 +540,31 @@ const server = http.createServer((req, res) => {
         return;
     }
     
-    // Serve other static files
-    if (url.startsWith('/pair-page') || url.startsWith('/qr-page')) {
-        // Redirect to home page with hash
-        res.writeHead(302, { 'Location': '/' });
-        res.end();
+    // Serve static files
+    if (url.match(/\.(css|js|png|jpg|jpeg|gif|svg|ico)$/)) {
+        const filePath = path.join(PUBLIC_DIR, url);
+        if (fs.existsSync(filePath)) {
+            const ext = path.extname(filePath);
+            const mimeTypes = {
+                '.css': 'text/css',
+                '.js': 'application/javascript',
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.gif': 'image/gif',
+                '.svg': 'image/svg+xml',
+                '.ico': 'image/x-icon'
+            };
+            res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+            fs.createReadStream(filePath).pipe(res);
+        } else {
+            res.writeHead(404);
+            res.end('File not found');
+        }
         return;
     }
     
-    // API endpoints
+    // ===== PAIR API =====
     if (url === '/pair' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -504,7 +627,7 @@ const server = http.createServer((req, res) => {
             <div class="title">HOST YOUR BOT NOW</div>
             <div class="price">10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD</div>
             <div class="panel">Panel & Server Available</div>
-            <a href="https://host.stanymaxhub.online/services/bots/pussy-escape-1370" target="_blank" class="link">host.stanymaxhub.online</a>
+            <a href="https://host.stanymaxhub.online" target="_blank" class="link">host.stanymaxhub.online</a>
         </div>
         
         <br>
@@ -522,6 +645,7 @@ const server = http.createServer((req, res) => {
         return;
     }
     
+    // ===== API STATUS =====
     else if (url === '/api/status') {
         let pairingCode = null;
         for (const [_, data] of pairingCodes) {
@@ -531,7 +655,6 @@ const server = http.createServer((req, res) => {
             }
         }
         
-        // Check for session
         let sessionId = null;
         if (fs.existsSync(CREDS_PATH)) {
             try {
@@ -556,20 +679,28 @@ const server = http.createServer((req, res) => {
         }));
     }
     
+    // ===== 404 =====
     else {
         res.writeHead(404, { 'Content-Type': 'text/html' });
         res.end('<center><h1>404 - Page Not Found</h1><a href="/">Go Home</a></center>');
     }
 });
 
+// ============================================================
+//  START SERVER
+// ============================================================
 server.listen(PORT, () => {
     console.log('Web server running at http://localhost:' + PORT);
     console.log('Session folder: ' + path.resolve(AUTH_FOLDER));
+    console.log('Bot prefix: ' + (global.BOT_PREFIX || '.'));
     loadPrefix();
 });
 
+// ============================================================
+//  PROCESS HANDLERS
+// ============================================================
 process.on('SIGINT', () => {
-    console.log('Shutting down gracefully...');
+    console.log('\nShutting down gracefully...');
     if (presenceInterval) clearInterval(presenceInterval);
     if (sock) sock.end();
     process.exit(0);
