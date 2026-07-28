@@ -23,7 +23,7 @@ global.downloadMediaMessage = downloadMediaMessage;
 global.bannedChats = global.bannedChats || [];
 
 // ============================================================
-//  SESSION HANDLER - ONE SESSION_ID ONLY
+//  SESSION HANDLER
 // ============================================================
 const SESSION_DIR = './session';
 const CREDS_PATH = path.join(SESSION_DIR, 'creds.json');
@@ -32,47 +32,40 @@ if (!fs.existsSync(SESSION_DIR)) {
     fs.mkdirSync(SESSION_DIR, { recursive: true });
 }
 
-// ===== RESTORE SESSION FROM SESSION_ID =====
 function restoreSessionFromId(sessionId) {
     try {
         let sessionData;
-        // Try JSON parse
         try {
             sessionData = JSON.parse(sessionId);
         } catch (e) {
-            // Try Base64 decode
             try {
                 const decoded = Buffer.from(sessionId, 'base64').toString('utf-8');
                 sessionData = JSON.parse(decoded);
             } catch (e2) {
-                console.error('❌ Invalid SESSION_ID format');
+                console.error('Invalid SESSION_ID format');
                 return false;
             }
         }
         if (!sessionData || typeof sessionData !== 'object') return false;
         fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
-        console.log('✅ Session restored from SESSION_ID');
+        console.log('Session restored from SESSION_ID');
         return true;
     } catch (error) {
-        console.error('❌ Error restoring session:', error.message);
+        console.error('Error restoring session:', error.message);
         return false;
     }
 }
 
-// ===== CHECK SESSION_ID ONCE =====
 let sessionRestored = false;
 const sessionId = process.env.SESSION_ID;
 
 if (sessionId && sessionId.length > 10) {
-    // Check if creds.json exists and is valid
     if (!fs.existsSync(CREDS_PATH) || fs.statSync(CREDS_PATH).size < 100) {
         sessionRestored = restoreSessionFromId(sessionId);
     } else {
-        console.log('📁 Using existing creds.json (SESSION_ID ignored)');
+        console.log('Using existing creds.json');
         sessionRestored = true;
     }
-} else {
-    console.log('ℹ️ No SESSION_ID found in environment variables');
 }
 
 if (!sessionRestored && fs.existsSync(CREDS_PATH)) {
@@ -81,17 +74,15 @@ if (!sessionRestored && fs.existsSync(CREDS_PATH)) {
         if (data && data.length > 50) {
             JSON.parse(data);
             sessionRestored = true;
-            console.log('📁 Using existing creds.json');
+            console.log('Using existing creds.json');
         }
-    } catch (e) {
-        console.log('⚠️ Corrupted creds.json, will create new session');
-    }
+    } catch (e) {}
 }
 
 if (!sessionRestored) {
-    console.log('📱 No session found. Bot will start with QR code.');
+    console.log('No session found. Bot will start with QR code.');
 } else {
-    console.log('✅ Session ready. Bot will connect automatically.');
+    console.log('Session ready. Bot will connect automatically.');
 }
 
 // ============================================================
@@ -109,13 +100,9 @@ let sock = null;
 let isConnecting = false;
 let welcomeSent = false;
 
-// ===== CREDITS UPDATE CONTROL =====
 let lastCredsUpdate = 0;
 const CREDS_UPDATE_INTERVAL = 30000;
 
-// ============================================================
-//  LOAD PREFIX
-// ============================================================
 function loadPrefix() {
     const configPath = path.join(__dirname, 'config.json');
     if (fs.existsSync(configPath)) {
@@ -123,21 +110,21 @@ function loadPrefix() {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (config.prefix) {
                 global.BOT_PREFIX = config.prefix;
-                console.log('✅ Loaded prefix:', global.BOT_PREFIX);
+                console.log('Loaded prefix:', global.BOT_PREFIX);
             }
         } catch (err) {
-            console.error('❌ Error loading config:', err);
+            console.error('Error loading config:', err);
         }
     }
     if (!global.BOT_PREFIX) {
         global.BOT_PREFIX = '.';
-        console.log('✅ Using default prefix: .');
+        console.log('Using default prefix: .');
     }
     startBot();
 }
 
 // ============================================================
-//  SEND WELCOME MESSAGE - HII INAFIKA SASA
+//  SEND WELCOME MESSAGE
 // ============================================================
 async function sendWelcomeMessage() {
     if (welcomeSent) return;
@@ -201,9 +188,9 @@ Panel & Server Available.
             }
         });
         welcomeSent = true;
-        console.log('✅ Welcome message sent successfully');
+        console.log('Welcome message sent successfully');
     } catch (err) {
-        console.error('❌ Welcome message error:', err);
+        console.error('Welcome message error:', err);
     }
 }
 
@@ -211,7 +198,7 @@ Panel & Server Available.
 //  START BOT
 // ============================================================
 function startBot() {
-    console.log('🚀 Starting WhatsApp Bot...');
+    console.log('Starting WhatsApp Bot...');
     isConnecting = true;
     welcomeSent = false;
 
@@ -222,7 +209,7 @@ function startBot() {
     (async () => {
         try {
             const { version, isLatest } = await fetchLatestWaWebVersion();
-            console.log('📱 Using WA v' + version.join(".") + ', isLatest: ' + isLatest);
+            console.log('Using WA v' + version.join(".") + ', isLatest: ' + isLatest);
 
             const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
             
@@ -248,7 +235,6 @@ function startBot() {
                         if (!err) {
                             latestQR = url;
                             botStatus = 'connecting';
-                            console.log('📱 QR code generated');
                         }
                     });
                 }
@@ -268,13 +254,13 @@ function startBot() {
                         : 0;
 
                     if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
-                        console.log('⚠️ Logged out. Cleaning session...');
+                        console.log('Logged out. Cleaning session...');
                         if (fs.existsSync(AUTH_FOLDER)) {
                             fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
                         }
                         setTimeout(() => startBot(), 5000);
                     } else {
-                        console.log('🔄 Reconnecting...');
+                        console.log('Reconnecting...');
                         setTimeout(() => startBot(), 5000);
                     }
                 } 
@@ -283,14 +269,10 @@ function startBot() {
                     botStatus = 'connected';
                     isConnecting = false;
 
-                    console.log('✅ Connection opened!');
-                    console.log('📱 Bot is now connected to WhatsApp');
-
                     if (!global.owners) global.owners = [];
 
                     if (!global.owners.includes(sock.user.id)) {
                         global.owners.push(sock.user.id);
-                        console.log('👑 Added owner:', sock.user.id);
                     }
                     
                     const abztech = [
@@ -303,18 +285,15 @@ function startBot() {
                     tech.forEach(owner => {
                         if (!global.owners.includes(owner)) {
                             global.owners.push(owner);
-                            console.log('👑 Added owner:', owner);
                         }
                     });
 
-                    // ANTI-SLEEP: Send presence every 60 seconds
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) {
                             sock.sendPresenceUpdate('available');
                         }
                     }, 60000);
 
-                    // SEND WELCOME MESSAGE AFTER 3 SECONDS
                     setTimeout(async () => {
                         await sendWelcomeMessage();
                     }, 3000);
@@ -323,17 +302,15 @@ function startBot() {
                 else if (connection === 'connecting') {
                     botStatus = 'connecting';
                     isConnecting = true;
-                    console.log('🔄 Connecting to WhatsApp...');
                 }
             });
 
-            // ===== CREDITS UPDATE WITH RATE LIMITING =====
             sock.ev.on('creds.update', async () => {
                 const now = Date.now();
                 if (now - lastCredsUpdate > CREDS_UPDATE_INTERVAL) {
                     await saveCreds();
                     lastCredsUpdate = now;
-                    console.log('💾 Credentials updated (throttled)');
+                    console.log('Credentials updated (throttled)');
                 }
             });
 
@@ -355,83 +332,91 @@ function startBot() {
                                         plugins.set(alias.toLowerCase(), plugin);
                                     });
                                 }
-                                console.log('✅ Loaded plugin: ' + plugin.name);
+                                console.log('Loaded plugin: ' + plugin.name);
                             }
                         } catch (error) {
-                            console.error('❌ Failed to load plugin ' + file + ':', error.message);
+                            console.error('Failed to load plugin ' + file + ':', error.message);
                         }
                     }
-                    console.log('📦 Total plugins loaded: ' + plugins.size);
+                    console.log('Total plugins loaded: ' + plugins.size);
                 } catch (error) {
-                    console.error('❌ Error loading plugins:', error);
+                    console.error('Error loading plugins:', error);
                 }
             }
            
-            // ===== MESSAGES HANDLER =====
+            // ===== MESSAGES HANDLER - HII NDIO INAJIBU =====
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
-                if (type !== 'notify' && type !== 'append') return;
-                
-                const CHANNEL_ID = "120363404317544295@newsletter";
-                
+                // Process all messages
                 for (const rawMsg of messages) {
-                    if (rawMsg.key?.remoteJid === CHANNEL_ID && rawMsg.key?.server_id) {
-                        const emojis = ["❤️", "💛", "👍", "💜", "😮", "🤍", "💙", "🔥", "💯", "⚡"];
-                        const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                    try {
+                        // Skip if no message
+                        if (!rawMsg.message) continue;
                         
-                        try {
-                            await sock.newsletterReactMessage(
-                                CHANNEL_ID, 
-                                rawMsg.key.server_id.toString(), 
-                                emoji
-                            );
-                            console.log('✅ Channel reaction: ' + emoji + ' to message ' + rawMsg.key.server_id);
-                        } catch (err) {
-                            console.log('❌ Channel React Error:', err.message);
-                        }
-                        continue;
-                    }
-                }
-                
-                for (const rawMsg of messages) {
-                    if (rawMsg.key.remoteJid === 'status@broadcast' && rawMsg.key.participant) {
-                        try {
-                            console.log('📱 Status detected from: ' + rawMsg.key.participant);
-                            await sock.readMessages([rawMsg.key]);
+                        // Skip if from self
+                        if (rawMsg.key?.fromMe) continue;
+                        
+                        // Skip status broadcasts
+                        if (rawMsg.key.remoteJid === 'status@broadcast') continue;
+                        
+                        console.log('📩 New message from:', rawMsg.key.remoteJid);
+                        
+                        // ===== CHANNEL AUTO-REACT =====
+                        const CHANNEL_ID = "120363404317544295@newsletter";
+                        if (rawMsg.key?.remoteJid === CHANNEL_ID && rawMsg.key?.server_id) {
+                            const emojis = ["❤️", "💛", "👍", "💜", "😮", "🤍", "💙", "🔥", "💯", "⚡"];
+                            const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                            try {
+                                await sock.newsletterReactMessage(
+                                    CHANNEL_ID, 
+                                    rawMsg.key.server_id.toString(), 
+                                    emoji
+                                );
+                                console.log('Channel reaction: ' + emoji);
+                            } catch (err) {
+                                console.log('Channel React Error:', err.message);
+                            }
                             continue;
-                        } catch (err) {
-                            console.log('❌ Status viewer error:', err.message);
                         }
-                    }
-                }
-
-                const rawMsg = messages[0];
-                if (!rawMsg.message) return;
-
-                const m = await serializeMessage(sock, rawMsg);
-
-                for (const plugin of plugins.values()) {
-                    if (typeof plugin.onMessage === 'function') {
-                        try { 
-                            const blocked = await plugin.onMessage(sock, m);
-                            if (blocked === true) return;
-                        } catch (err) { 
-                            console.error('❌ onMessage error (' + plugin.name + '):', err); 
+                        
+                        // ===== STATUS VIEWER =====
+                        if (rawMsg.key.remoteJid === 'status@broadcast' && rawMsg.key.participant) {
+                            try {
+                                console.log('Status detected from:', rawMsg.key.participant);
+                                await sock.readMessages([rawMsg.key]);
+                            } catch (err) {
+                                console.log('Status viewer error:', err.message);
+                            }
+                            continue;
                         }
-                    }
-                }
-
-                if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
-                    const args = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
-                    const commandName = args.shift().toLowerCase();
-                    const plugin = plugins.get(commandName);
-                    
-                    if (plugin) {
-                        try { 
-                            await plugin.execute(sock, m, args); 
-                        } catch (err) { 
-                            console.error('❌ Plugin error (' + commandName + '):', err); 
-                            await m.reply('❌ Error running command.'); 
+                        
+                        // ===== SERIALIZE AND PROCESS =====
+                        const m = await serializeMessage(sock, rawMsg);
+                        if (!m) continue;
+                        
+                        console.log('📝 Message body:', m.body || 'Media message');
+                        
+                        // Check if it's a command
+                        if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
+                            const args = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
+                            const commandName = args.shift().toLowerCase();
+                            console.log('🔹 Command detected:', commandName);
+                            
+                            const plugin = plugins.get(commandName);
+                            if (plugin) {
+                                try {
+                                    await plugin.execute(sock, m, args);
+                                    console.log('✅ Command executed:', commandName);
+                                } catch (err) {
+                                    console.error('Plugin error:', err);
+                                    await m.reply('❌ Error running command.');
+                                }
+                            } else {
+                                console.log('❌ Unknown command:', commandName);
+                            }
                         }
+                        
+                    } catch (err) {
+                        console.error('Message processing error:', err);
                     }
                 }
             });
@@ -468,16 +453,16 @@ function startBot() {
                         }
                     }
                 } catch (err) {
-                    console.error('❌ group-participants.update error:', err)
+                    console.error('group-participants.update error:', err)
                 }
             })
 
             sock.ev.on('messages.reaction', async (reactions) => {
-                console.log('💖 Reaction update:', reactions);
+                console.log('Reaction update:', reactions);
             });
 
         } catch (error) {
-            console.error('❌ Bot startup error:', error);
+            console.error('Bot startup error:', error);
             isConnecting = false;
             setTimeout(() => startBot(), 10000);
         }
@@ -855,9 +840,9 @@ const server = http.createServer((req, res) => {
     </div>
 </body>
 </html>`);
-                console.log('✅ Pairing code for ' + phoneNumber + ': ' + pairingCode);
+                console.log('Pairing code for ' + phoneNumber + ': ' + pairingCode);
             } catch (error) {
-                console.error('❌ Pair error:', error);
+                console.error('Pair error:', error);
                 res.writeHead(200, { 'Content-Type': 'text/html' });
                 res.end('<center><h2>Error</h2><p>' + error.message + '</p><a href="/">Try Again</a></center>');
             }
@@ -897,22 +882,22 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log('🌐 Web server running at http://localhost:' + PORT);
-    console.log('📁 Session folder: ' + path.resolve(AUTH_FOLDER));
+    console.log('Web server running at http://localhost:' + PORT);
+    console.log('Session folder: ' + path.resolve(AUTH_FOLDER));
     loadPrefix();
 });
 
 process.on('SIGINT', () => {
-    console.log('\n👋 Shutting down gracefully...');
+    console.log('\nShutting down gracefully...');
     if (presenceInterval) clearInterval(presenceInterval);
     if (sock) sock.end();
     process.exit(0);
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('⚠️ Uncaught Exception:', err);
+    console.error('Uncaught Exception:', err);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('⚠️ Unhandled Rejection:', reason);
+    console.error('Unhandled Rejection:', reason);
 });
