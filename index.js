@@ -23,7 +23,7 @@ global.downloadMediaMessage = downloadMediaMessage;
 global.bannedChats = global.bannedChats || [];
 
 // ============================================================
-//  SESSION HANDLER
+//  SESSION HANDLER - SESSION_ID SUPPORT
 // ============================================================
 const SESSION_DIR = './session';
 const CREDS_PATH = path.join(SESSION_DIR, 'creds.json');
@@ -32,62 +32,40 @@ if (!fs.existsSync(SESSION_DIR)) {
     fs.mkdirSync(SESSION_DIR, { recursive: true });
 }
 
-function restoreSessionFromId(sessionId) {
+// Restore from SESSION_ID if provided
+if (process.env.SESSION_ID && !fs.existsSync(CREDS_PATH)) {
     try {
         let sessionData;
         try {
-            sessionData = JSON.parse(sessionId);
+            sessionData = JSON.parse(process.env.SESSION_ID);
         } catch (e) {
             try {
-                const decoded = Buffer.from(sessionId, 'base64').toString('utf-8');
+                const decoded = Buffer.from(process.env.SESSION_ID, 'base64').toString('utf-8');
                 sessionData = JSON.parse(decoded);
             } catch (e2) {
                 console.error('Invalid SESSION_ID format');
-                return false;
             }
         }
-        if (!sessionData || typeof sessionData !== 'object') return false;
-        fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
-        console.log('Session restored from SESSION_ID');
-        return true;
-    } catch (error) {
-        console.error('Error restoring session:', error.message);
-        return false;
-    }
-}
-
-let sessionRestored = false;
-const sessionId = process.env.SESSION_ID;
-
-if (sessionId && sessionId.length > 10) {
-    if (!fs.existsSync(CREDS_PATH) || fs.statSync(CREDS_PATH).size < 100) {
-        sessionRestored = restoreSessionFromId(sessionId);
-    } else {
-        console.log('Using existing creds.json');
-        sessionRestored = true;
-    }
-}
-
-if (!sessionRestored && fs.existsSync(CREDS_PATH)) {
-    try {
-        const data = fs.readFileSync(CREDS_PATH, 'utf8');
-        if (data && data.length > 50) {
-            JSON.parse(data);
-            sessionRestored = true;
-            console.log('Using existing creds.json');
+        if (sessionData) {
+            fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
+            console.log('✅ Session restored from SESSION_ID');
         }
-    } catch (e) {}
+    } catch (err) {
+        console.error('Error restoring session:', err);
+    }
 }
 
-if (!sessionRestored) {
-    console.log('No session found. Bot will start with QR code.');
-} else {
-    console.log('Session ready. Bot will connect automatically.');
+// Also check global.sessionid (legacy)
+if (!fs.existsSync(CREDS_PATH) && global.sessionid) {
+    try {
+        const sessionData = JSON.parse(global.sessionid);
+        fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
+        console.log('✅ Session restored from global.sessionid');
+    } catch (err) {
+        console.error('Error restoring session from global.sessionid:', err);
+    }
 }
 
-// ============================================================
-//  BOT CONFIGURATION
-// ============================================================
 const AUTH_FOLDER = './session';
 const PLUGIN_FOLDER = './plugins';
 const PORT = process.env.PORT || 3000;
@@ -99,7 +77,6 @@ let presenceInterval = null;
 let sock = null;
 let isConnecting = false;
 let welcomeSent = false;
-
 let lastCredsUpdate = 0;
 const CREDS_UPDATE_INTERVAL = 30000;
 
@@ -110,7 +87,7 @@ function loadPrefix() {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (config.prefix) {
                 global.BOT_PREFIX = config.prefix;
-                console.log('Loaded prefix:', global.BOT_PREFIX);
+                console.log(`✅ Loaded prefix: ${global.BOT_PREFIX}`);
             }
         } catch (err) {
             console.error('Error loading config:', err);
@@ -188,17 +165,14 @@ Panel & Server Available.
             }
         });
         welcomeSent = true;
-        console.log('Welcome message sent successfully');
+        console.log('✅ Welcome message sent successfully');
     } catch (err) {
-        console.error('Welcome message error:', err);
+        console.error('❌ Welcome message error:', err);
     }
 }
 
-// ============================================================
-//  START BOT
-// ============================================================
 function startBot() {
-    console.log('Starting WhatsApp Bot...');
+    console.log('🚀 Starting WhatsApp Bot...');
     isConnecting = true;
     welcomeSent = false;
 
@@ -209,7 +183,7 @@ function startBot() {
     (async () => {
         try {
             const { version, isLatest } = await fetchLatestWaWebVersion();
-            console.log('Using WA v' + version.join(".") + ', isLatest: ' + isLatest);
+            console.log(`📱 Using WA v${version.join(".")}, isLatest: ${isLatest}`);
 
             const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
             
@@ -253,21 +227,24 @@ function startBot() {
                         ? lastDisconnect.error.output.statusCode
                         : 0;
 
-                    if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
-                        console.log('Logged out. Cleaning session...');
+                    const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+                    if (shouldReconnect) {
+                        setTimeout(() => startBot(), 5000);
+                    } else {
                         if (fs.existsSync(AUTH_FOLDER)) {
                             fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
                         }
-                        setTimeout(() => startBot(), 5000);
-                    } else {
-                        console.log('Reconnecting...');
-                        setTimeout(() => startBot(), 5000);
+                        setTimeout(() => startBot(), 3000);
                     }
                 } 
                 
                 else if (connection === 'open') {
                     botStatus = 'connected';
                     isConnecting = false;
+                    welcomeSent = false;
+
+                    console.log('✅ Connection opened!');
 
                     if (!global.owners) global.owners = [];
 
@@ -288,6 +265,7 @@ function startBot() {
                         }
                     });
 
+                    // ANTI-SLEEP: Send presence every 60 seconds
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) {
                             sock.sendPresenceUpdate('available');
@@ -305,12 +283,13 @@ function startBot() {
                 }
             });
 
+            // ===== CREDITS UPDATE WITH RATE LIMITING =====
             sock.ev.on('creds.update', async () => {
                 const now = Date.now();
                 if (now - lastCredsUpdate > CREDS_UPDATE_INTERVAL) {
                     await saveCreds();
                     lastCredsUpdate = now;
-                    console.log('Credentials updated (throttled)');
+                    console.log('💾 Credentials updated (throttled)');
                 }
             });
 
@@ -332,36 +311,32 @@ function startBot() {
                                         plugins.set(alias.toLowerCase(), plugin);
                                     });
                                 }
-                                console.log('Loaded plugin: ' + plugin.name);
+                                console.log(`✅ Loaded plugin: ${plugin.name}`);
+                            } else {
+                                console.warn(`⚠️ Invalid plugin structure in ${file}`);
                             }
                         } catch (error) {
-                            console.error('Failed to load plugin ' + file + ':', error.message);
+                            console.error(`❌ Failed to load plugin ${file}:`, error.message);
                         }
                     }
-                    console.log('Total plugins loaded: ' + plugins.size);
+                    console.log(`📦 Total plugins loaded: ${plugins.size}`);
                 } catch (error) {
-                    console.error('Error loading plugins:', error);
+                    console.error('❌ Error loading plugins:', error);
                 }
+            } else {
+                console.log('📁 No plugins folder found');
             }
            
-            // ===== MESSAGES HANDLER - HII NDIO INAJIBU =====
+            // ===== MESSAGES HANDLER - FIXED =====
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
-                // Process all messages
+                if (type !== 'notify' && type !== 'append') return;
+                
+                const CHANNEL_ID = "120363404317544295@newsletter";
+                
+                // Process each message
                 for (const rawMsg of messages) {
                     try {
-                        // Skip if no message
-                        if (!rawMsg.message) continue;
-                        
-                        // Skip if from self
-                        if (rawMsg.key?.fromMe) continue;
-                        
-                        // Skip status broadcasts
-                        if (rawMsg.key.remoteJid === 'status@broadcast') continue;
-                        
-                        console.log('📩 New message from:', rawMsg.key.remoteJid);
-                        
-                        // ===== CHANNEL AUTO-REACT =====
-                        const CHANNEL_ID = "120363404317544295@newsletter";
+                        // Channel auto-reaction
                         if (rawMsg.key?.remoteJid === CHANNEL_ID && rawMsg.key?.server_id) {
                             const emojis = ["❤️", "💛", "👍", "💜", "😮", "🤍", "💙", "🔥", "💯", "⚡"];
                             const emoji = emojis[Math.floor(Math.random() * emojis.length)];
@@ -371,31 +346,51 @@ function startBot() {
                                     rawMsg.key.server_id.toString(), 
                                     emoji
                                 );
-                                console.log('Channel reaction: ' + emoji);
+                                console.log(`✅ Channel reaction: ${emoji}`);
                             } catch (err) {
-                                console.log('Channel React Error:', err.message);
+                                console.log("❌ Channel React Error:", err.message);
                             }
                             continue;
                         }
                         
-                        // ===== STATUS VIEWER =====
+                        // Status viewer
                         if (rawMsg.key.remoteJid === 'status@broadcast' && rawMsg.key.participant) {
                             try {
-                                console.log('Status detected from:', rawMsg.key.participant);
+                                console.log(`📱 Status detected from: ${rawMsg.key.participant}`);
                                 await sock.readMessages([rawMsg.key]);
+                                continue;
                             } catch (err) {
-                                console.log('Status viewer error:', err.message);
+                                console.log('❌ Status viewer error:', err.message);
                             }
-                            continue;
                         }
                         
-                        // ===== SERIALIZE AND PROCESS =====
+                        // Skip if no message
+                        if (!rawMsg.message) continue;
+                        
+                        // Skip self messages
+                        if (rawMsg.key?.fromMe) continue;
+                        
+                        console.log('📩 New message from:', rawMsg.key.remoteJid);
+                        
+                        // Serialize message
                         const m = await serializeMessage(sock, rawMsg);
                         if (!m) continue;
                         
                         console.log('📝 Message body:', m.body || 'Media message');
                         
-                        // Check if it's a command
+                        // Check for plugin onMessage handlers first
+                        for (const plugin of plugins.values()) {
+                            if (typeof plugin.onMessage === 'function') {
+                                try { 
+                                    const blocked = await plugin.onMessage(sock, m);
+                                    if (blocked === true) return;
+                                } catch (err) { 
+                                    console.error(`❌ onMessage error (${plugin.name}):`, err); 
+                                }
+                            }
+                        }
+                        
+                        // Check for commands
                         if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
                             const args = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
                             const commandName = args.shift().toLowerCase();
@@ -403,12 +398,12 @@ function startBot() {
                             
                             const plugin = plugins.get(commandName);
                             if (plugin) {
-                                try {
-                                    await plugin.execute(sock, m, args);
+                                try { 
+                                    await plugin.execute(sock, m, args); 
                                     console.log('✅ Command executed:', commandName);
-                                } catch (err) {
-                                    console.error('Plugin error:', err);
-                                    await m.reply('❌ Error running command.');
+                                } catch (err) { 
+                                    console.error(`❌ Plugin error (${commandName}):`, err); 
+                                    await m.reply('❌ Error running command.'); 
                                 }
                             } else {
                                 console.log('❌ Unknown command:', commandName);
@@ -416,7 +411,7 @@ function startBot() {
                         }
                         
                     } catch (err) {
-                        console.error('Message processing error:', err);
+                        console.error('❌ Message processing error:', err);
                     }
                 }
             });
@@ -439,13 +434,13 @@ function startBot() {
 
                         if (update.action === 'add') {
                             if (userId === sock.user.id) continue
-                            const text = '👋 Welcome @' + memberName + '!\n🎉 Glad to have you in this group!'
+                            const text = `👋 Welcome @${memberName}!\n🎉 Glad to have you in this group!`
                             await sock.sendMessage(groupId, {
                                 text,
                                 mentions: [userId]
                             })
                         } else if (update.action === 'remove') {
-                            const text = '👋 @' + memberName + ' has left the group.'
+                            const text = `👋 @${memberName} has left the group.`
                             await sock.sendMessage(groupId, {
                                 text,
                                 mentions: [userId]
@@ -453,16 +448,16 @@ function startBot() {
                         }
                     }
                 } catch (err) {
-                    console.error('group-participants.update error:', err)
+                    console.error('❌ group-participants.update error:', err)
                 }
             })
 
             sock.ev.on('messages.reaction', async (reactions) => {
-                console.log('Reaction update:', reactions);
+                console.log('💖 Reaction update:', reactions);
             });
 
         } catch (error) {
-            console.error('Bot startup error:', error);
+            console.error('❌ Bot startup error:', error);
             isConnecting = false;
             setTimeout(() => startBot(), 10000);
         }
