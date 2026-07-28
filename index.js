@@ -30,7 +30,6 @@ if (!fs.existsSync(SESSION_DIR)) {
     fs.mkdirSync(SESSION_DIR, { recursive: true });
 }
 
-// Check if SESSION_ID exists in environment variables
 if (process.env.SESSION_ID && !fs.existsSync(CREDS_PATH)) {
     try {
         let sessionData;
@@ -41,25 +40,24 @@ if (process.env.SESSION_ID && !fs.existsSync(CREDS_PATH)) {
                 const decoded = Buffer.from(process.env.SESSION_ID, 'base64').toString('utf-8');
                 sessionData = JSON.parse(decoded);
             } catch (e2) {
-                console.error('❌ Invalid SESSION_ID format. Please provide valid JSON.');
+                console.error('Invalid SESSION_ID format. Provide valid JSON.');
                 process.exit(1);
             }
         }
         fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
-        console.log('✅ Session restored from SESSION_ID environment variable');
+        console.log('Session restored from SESSION_ID');
     } catch (err) {
-        console.error('❌ Error restoring session from SESSION_ID:', err);
+        console.error('Error restoring session from SESSION_ID:', err);
     }
 } else if (fs.existsSync(CREDS_PATH)) {
-    console.log('📁 Using existing session from creds.json');
+    console.log('Using existing session from creds.json');
 }
 
-// Also check for global.sessionid (legacy support)
 if (!fs.existsSync(CREDS_PATH) && global.sessionid) {
     try {
         const sessionData = JSON.parse(global.sessionid);
         fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
-        console.log('✅ Session restored from global.sessionid');
+        console.log('Session restored from global.sessionid');
     } catch (err) {
         console.error('Error restoring session from global.sessionid:', err);
     }
@@ -77,7 +75,6 @@ let sock = null;
 let isConnecting = false;
 let welcomeSent = false;
 
-// ===== LOAD PREFIX =====
 function loadPrefix() {
     const configPath = path.join(__dirname, 'config.json');
     if (fs.existsSync(configPath)) {
@@ -85,7 +82,7 @@ function loadPrefix() {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (config.prefix) {
                 global.BOT_PREFIX = config.prefix;
-                console.log(`✅ Loaded prefix: ${global.BOT_PREFIX}`);
+                console.log('Loaded prefix:', global.BOT_PREFIX);
             }
         } catch (err) {
             console.error('Error loading config:', err);
@@ -94,34 +91,52 @@ function loadPrefix() {
     startBot();
 }
 
-// ===== SEND WELCOME MESSAGE =====
 async function sendWelcomeMessage() {
     if (welcomeSent) return;
     if (!sock) return;
     
     try {
         const username = sock.user?.name || 'User';
-        const welcomeText = `╭─❒〘 ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 〙❒
+        const welcomeText = `╭─❒ ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐
 │
-├─❒ *Welcome @${username}*
+├─❒ Welcome @${username}
 │
-├─❒ *ᴘᴜssʏ ᴇsᴄᴀᴘᴇ ᴍᴜʟᴛɪᴘʟᴇ ᴅᴇᴠɪᴄᴇs*
+├─❒ ᴘᴜssʏ ᴇsᴄᴀᴘᴇ ᴍᴜʟᴛɪᴘʟᴇ ᴅᴇᴠɪᴄᴇs
 │
-├─❒ *sᴛᴀᴛᴜs:* ᴄᴏɴɴᴇᴄᴛᴇᴅ ✅
+├─❒ Status: Connected
 │
-├─❒ *ᴘʀᴇғɪx:* ${global.BOT_PREFIX || '.'}
+├─❒ Prefix: ${global.BOT_PREFIX || '.'}
 │
-├─❒ *ᴏᴡɴᴇʀ:* ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐
+├─❒ Owner: ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐
 │
-├─❒ *ʀᴇᴘᴏ:* ɢɪᴛʜᴜʙ.ᴄᴏᴍ/sᴛᴀɴʏᴛᴢ390
+├─❒ Repo: github.com/Stanytz390/PussyEscape0.0.1
 │
-├─❒ *ᴘᴀɪʀɪɴɢ:* ʟɪɴᴋ.sᴛᴀɴʏᴍᴀxʜᴜʙ.ᴏɴʟɪɴᴇ/ᴘᴀɪʀ
+├─❒ Pairing: link.stanymaxhub.online/pair
 │
-├─❒ *ǫʀ ᴄᴏᴅᴇ:* ʟɪɴᴋ.sᴛᴀɴʏᴍᴀxʜᴜʙ.ᴏɴʟɪɴᴇ/ᴘᴀɪʀ-ᴘᴀɢᴇ
+├─❒ QR Code: link.stanymaxhub.online/pair-page
 │
-╰─❒ *ᴘᴏᴡᴇʀᴇᴅ ʙʏ sᴛᴀɴʏᴛᴢ* ❒
+├─❒ Hosting: host.stanymaxhub.online
+│
+├─❒ Deploy: host.stanymaxhub.online/services/bots/pussy-escape-1370
+│
+├─❒ Panel: Available
+│
+├─❒ Server: Available
+│
+├─❒ Coins: 10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD
+│
+╰─❒ Powered by STANYTZ
 
-> « 𝙏𝙞𝙢𝙚 - 𝙏𝙞𝙢𝙚𝙡𝙚𝙨𝙨 »`;
+> Time - Timeless
+
+=======================
+HOST YOUR BOT NOW!
+=======================
+Get premium hosting for your WhatsApp bot.
+Affordable prices starting at 10 coins.
+Visit: host.stanymaxhub.online
+Panel & Server Available.
+=======================`;
 
         await sock.sendMessage(sock.user.id, {
             image: { url: 'https://url.bmbxmd.workers.dev/Migo.jpeg' },
@@ -132,21 +147,20 @@ async function sendWelcomeMessage() {
                 isForwarded: true,
                 forwardedNewsletterMessageInfo: {
                     newsletterJid: '120363404317544295@newsletter',
-                    newsletterName: 'ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐「 𝙏𝙞𝙢𝙚 - 𝙏𝙞𝙢𝙚𝙡𝙚𝙨𝙨 」',
+                    newsletterName: 'ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐',
                     serverMessageId: 1
                 }
             }
         });
         welcomeSent = true;
-        console.log('✅ Welcome message sent successfully');
+        console.log('Welcome message sent');
     } catch (err) {
-        console.error('❌ Welcome message error:', err);
+        console.error('Welcome message error:', err);
     }
 }
 
-// ===== START BOT =====
 function startBot() {
-    console.log('🚀 Starting WhatsApp Bot...');
+    console.log('Starting WhatsApp Bot...');
     isConnecting = true;
     welcomeSent = false;
 
@@ -157,7 +171,7 @@ function startBot() {
     (async () => {
         try {
             const { version, isLatest } = await fetchLatestWaWebVersion();
-            console.log(`📱 Using WA v${version.join(".")}, isLatest: ${isLatest}`);
+            console.log('Using WA v' + version.join(".") + ', isLatest: ' + isLatest);
 
             const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
             
@@ -166,10 +180,13 @@ function startBot() {
                 logger: pino({ level: 'silent' }),
                 auth: state,
                 printQRInTerminal: true,
-                keepAliveIntervalMs: 10000,
+                keepAliveIntervalMs: 60000,
                 markOnlineOnConnect: true,
                 syncFullHistory: false,
-                browser: ['Bot', 'Chrome', '1.0.0']
+                browser: ['Bot', 'Chrome', '1.0.0'],
+                connectTimeoutMs: 60000,
+                defaultQueryTimeoutMs: 60000,
+                transactionOpts: { maxRetries: 2 }
             });
             
             sock.ev.on('connection.update', async (update) => {
@@ -198,14 +215,14 @@ function startBot() {
                         ? lastDisconnect.error.output.statusCode
                         : 0;
 
-                    const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-
-                    if (shouldReconnect) {
-                        setTimeout(() => startBot(), 5000);
-                    } else {
+                    if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+                        console.log('Logged out. Cleaning session...');
                         if (fs.existsSync(AUTH_FOLDER)) {
                             fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
                         }
+                        setTimeout(() => startBot(), 3000);
+                    } else {
+                        console.log('Reconnecting...');
                         setTimeout(() => startBot(), 3000);
                     }
                 } 
@@ -237,12 +254,11 @@ function startBot() {
                         if (sock?.ws?.readyState === 1) {
                             sock.sendPresenceUpdate('available');
                         }
-                    }, 10000);
+                    }, 60000);
 
-                    // ===== SEND WELCOME MESSAGE AFTER DELAY =====
                     setTimeout(async () => {
                         await sendWelcomeMessage();
-                    }, 3000);
+                    }, 2000);
                 } 
                 
                 else if (connection === 'connecting') {
@@ -253,10 +269,9 @@ function startBot() {
 
             sock.ev.on('creds.update', async () => {
                 await saveCreds();
-                console.log('💾 Credentials updated');
+                console.log('Credentials updated');
             });
 
-            // ===== LOAD PLUGINS =====
             const plugins = new Map();
             const pluginPath = path.join(__dirname, PLUGIN_FOLDER);
             
@@ -274,29 +289,23 @@ function startBot() {
                                         plugins.set(alias.toLowerCase(), plugin);
                                     });
                                 }
-                                console.log(`✅ Loaded plugin: ${plugin.name}`);
-                            } else {
-                                console.warn(`⚠️ Invalid plugin structure in ${file}`);
+                                console.log('Loaded plugin: ' + plugin.name);
                             }
                         } catch (error) {
-                            console.error(`❌ Failed to load plugin ${file}:`, error.message);
+                            console.error('Failed to load plugin ' + file + ':', error.message);
                         }
                     }
-                    console.log(`📦 Total plugins loaded: ${plugins.size}`);
+                    console.log('Total plugins loaded: ' + plugins.size);
                 } catch (error) {
-                    console.error('❌ Error loading plugins:', error);
+                    console.error('Error loading plugins:', error);
                 }
-            } else {
-                console.log('📁 No plugins folder found');
             }
            
-            // ===== MESSAGES HANDLER =====
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
                 if (type !== 'notify' && type !== 'append') return;
                 
                 const CHANNEL_ID = "120363404317544295@newsletter";
                 
-                // ===== AUTO-REACT TO CHANNEL MESSAGES =====
                 for (const rawMsg of messages) {
                     if (rawMsg.key?.remoteJid === CHANNEL_ID && rawMsg.key?.server_id) {
                         const emojis = ["❤️", "💛", "👍", "💜", "😮", "🤍", "💙", "🔥", "💯", "⚡"];
@@ -308,23 +317,22 @@ function startBot() {
                                 rawMsg.key.server_id.toString(), 
                                 emoji
                             );
-                            console.log(`✅ Channel reaction: ${emoji} to message ${rawMsg.key.server_id}`);
+                            console.log('Channel reaction: ' + emoji + ' to message ' + rawMsg.key.server_id);
                         } catch (err) {
-                            console.log("❌ Channel React Error:", err.message);
+                            console.log('Channel React Error:', err.message);
                         }
                         continue;
                     }
                 }
                 
-                // ===== STATUS VIEWER =====
                 for (const rawMsg of messages) {
                     if (rawMsg.key.remoteJid === 'status@broadcast' && rawMsg.key.participant) {
                         try {
-                            console.log(`📱 Status detected from: ${rawMsg.key.participant}`);
+                            console.log('Status detected from: ' + rawMsg.key.participant);
                             await sock.readMessages([rawMsg.key]);
                             continue;
                         } catch (err) {
-                            console.log('❌ Status viewer error:', err.message);
+                            console.log('Status viewer error:', err.message);
                         }
                     }
                 }
@@ -340,7 +348,7 @@ function startBot() {
                             const blocked = await plugin.onMessage(sock, m);
                             if (blocked === true) return;
                         } catch (err) { 
-                            console.error(`❌ onMessage error (${plugin.name}):`, err); 
+                            console.error('onMessage error (' + plugin.name + '):', err); 
                         }
                     }
                 }
@@ -354,14 +362,13 @@ function startBot() {
                         try { 
                             await plugin.execute(sock, m, args); 
                         } catch (err) { 
-                            console.error(`❌ Plugin error (${commandName}):`, err); 
-                            await m.reply('❌ Error running command.'); 
+                            console.error('Plugin error (' + commandName + '):', err); 
+                            await m.reply('Error running command.'); 
                         }
                     }
                 }
             });
             
-            // ===== GROUP PARTICIPANTS =====
             sock.ev.on('group-participants.update', async (update) => {
                 try {
                     if (!global.welcomeConfig?.enabled) return
@@ -379,13 +386,13 @@ function startBot() {
 
                         if (update.action === 'add') {
                             if (userId === sock.user.id) continue
-                            const text = `👋 Welcome @${memberName}!\n🎉 Glad to have you in this group!`
+                            const text = 'Welcome @' + memberName + '!\nGlad to have you in this group!'
                             await sock.sendMessage(groupId, {
                                 text,
                                 mentions: [userId]
                             })
                         } else if (update.action === 'remove') {
-                            const text = `ya @${memberName} has left the group.\nWe are not gonna miss you!`
+                            const text = '@' + memberName + ' has left the group.'
                             await sock.sendMessage(groupId, {
                                 text,
                                 mentions: [userId]
@@ -393,23 +400,22 @@ function startBot() {
                         }
                     }
                 } catch (err) {
-                    console.error('❌ group-participants.update error:', err)
+                    console.error('group-participants.update error:', err)
                 }
             })
 
             sock.ev.on('messages.reaction', async (reactions) => {
-                console.log('💖 Reaction update:', reactions);
+                console.log('Reaction update:', reactions);
             });
 
         } catch (error) {
-            console.error('❌ Bot startup error:', error);
+            console.error('Bot startup error:', error);
             isConnecting = false;
-            setTimeout(() => startBot(), 10000);
+            setTimeout(() => startBot(), 5000);
         }
     })();
 }
 
-// ===== HTTP SERVER =====
 const server = http.createServer((req, res) => {
     const url = req.url;
     
@@ -421,7 +427,7 @@ const server = http.createServer((req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#050510">
-    <title>PUSSY ESCAPE · Bot</title>
+    <title>ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐 · Bot</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
@@ -444,6 +450,23 @@ const server = http.createServer((req, res) => {
         .qr-area{text-align:center;padding:16px 0;}
         .qr-area img{max-width:200px;border-radius:12px;background:#fff;padding:10px}
         .qr-placeholder{color:rgba(255,255,255,0.3);padding:20px}
+        
+        .pair-form{display:none;margin-top:12px;padding:16px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.06)}
+        .pair-form.show{display:block}
+        .pair-form label{font-size:11px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
+        .pair-form .input-group{display:flex;gap:8px}
+        .pair-form input{flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03);color:#fff;font-size:14px;outline:none}
+        .pair-form input:focus{border-color:#ff3b7f}
+        .pair-form .submit-btn{padding:10px 20px;border:none;border-radius:10px;background:linear-gradient(135deg,#ff3b7f,#b967ff);color:#fff;font-weight:600;cursor:pointer}
+        .pair-form .submit-btn:hover{transform:translateY(-2px)}
+        .pair-form .submit-btn:disabled{opacity:0.5;cursor:not-allowed}
+        
+        .pairing-code-box{display:none;margin-top:12px;padding:16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.06)}
+        .pairing-code-box.show{display:block}
+        .pairing-code-box .code{font-size:28px;font-weight:900;color:#ff3b7f;text-align:center;letter-spacing:6px;font-family:monospace;padding:8px 0}
+        .pairing-code-box .label{font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:2px;text-align:center;display:block}
+        .pairing-code-box .copy-btn{background:#ff3b7f;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;margin-top:8px;width:100%}
+        
         .btn-group{display:flex;gap:10px;margin-top:12px}
         .btn{flex:1;padding:12px;border:none;border-radius:12px;font-weight:700;font-size:13px;cursor:pointer;transition:all 0.3s}
         .btn-primary{background:linear-gradient(135deg,#ff3b7f,#b967ff);color:#fff}
@@ -451,20 +474,22 @@ const server = http.createServer((req, res) => {
         .btn-secondary{background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.1)}
         .btn-secondary:hover{background:rgba(255,255,255,0.1)}
         .btn:disabled{opacity:0.5;cursor:not-allowed}
-        .pairing-code-box{display:none;margin-top:12px;padding:16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.06)}
-        .pairing-code-box.show{display:block}
-        .pairing-code-box .code{font-size:28px;font-weight:900;color:#ff3b7f;text-align:center;letter-spacing:6px;font-family:monospace;padding:8px 0}
-        .pairing-code-box .label{font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:2px;text-align:center;display:block}
-        .pairing-code-box .copy-btn{background:#ff3b7f;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;margin-top:8px;width:100%}
+        
         .footer{margin-top:20px;text-align:center;font-size:10px;color:rgba(255,255,255,0.2)}
         .footer a{color:rgba(255,255,255,0.3);text-decoration:none}
         .prefix-display{font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:8px}
+        .hosting-ad{margin-top:12px;padding:12px;background:rgba(255,59,127,0.05);border:1px solid rgba(255,59,127,0.08);border-radius:12px;text-align:center}
+        .hosting-ad .title{color:#ff3b7f;font-weight:700;font-size:12px}
+        .hosting-ad .desc{color:rgba(255,255,255,0.4);font-size:10px;margin-top:4px}
+        .hosting-ad .price{color:#fff;font-weight:600;font-size:11px;margin-top:4px}
+        .hosting-ad .link{color:#b967ff;text-decoration:none;font-size:10px}
+        .hosting-ad .panel{color:rgba(255,255,255,0.3);font-size:10px;margin-top:4px}
     </style>
 </head>
 <body>
     <div class="container">
         <img src="https://url.bmbxmd.workers.dev/Migo.jpeg" class="logo" onerror="this.style.display='none'">
-        <h1>PUSSY<span>ESCAPE</span></h1>
+        <h1>ᴘᴜssʏ<span>ᴇsᴄᴀᴘᴇ</span></h1>
         <div class="sub">WhatsApp Bot</div>
         <div class="card">
             <div class="status">
@@ -490,6 +515,14 @@ const server = http.createServer((req, res) => {
                 </button>
             </div>
 
+            <div id="pairForm" class="pair-form">
+                <label for="phoneInput"><i class="fa-solid fa-phone"></i> Phone Number (with country code)</label>
+                <div class="input-group">
+                    <input type="tel" id="phoneInput" placeholder="255712345678" value="255">
+                    <button id="submitPairBtn" class="submit-btn"><i class="fa-solid fa-link"></i> Generate</button>
+                </div>
+            </div>
+
             <div id="pairingCodeBox" class="pairing-code-box">
                 <span class="label">Pairing Code</span>
                 <div class="code" id="pairingCodeDisplay">------</div>
@@ -499,11 +532,21 @@ const server = http.createServer((req, res) => {
             <div class="info-text">
                 <span id="statusMessage">Bot is <span class="highlight">disconnected</span>. Use Pair Code or QR to connect.</span>
             </div>
-            <div class="prefix-display" id="prefixDisplay2">Command prefix: <span id="prefixValue">.</span></div>
+            <div class="prefix-display">Command prefix: <span id="prefixValue">.</span></div>
+            
+            <div class="hosting-ad">
+                <div class="title">HOST YOUR BOT NOW</div>
+                <div class="desc">Get premium hosting for your WhatsApp bot</div>
+                <div class="price">10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD</div>
+                <div class="panel">Panel & Server Available</div>
+                <a href="https://host.stanymaxhub.online" target="_blank" class="link">host.stanymaxhub.online</a>
+            </div>
         </div>
         <div class="footer">
             Developed by <a href="tel:+255787069580">STANYTZ</a><br>
-            &copy; 2026 PUSSY ESCAPE
+            &copy; 2026 ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐<br>
+            <a href="https://github.com/Stanytz390/PussyEscape0.0.1" target="_blank" style="color:rgba(255,255,255,0.2);">GitHub Repo</a> | 
+            <a href="https://host.stanymaxhub.online" target="_blank" style="color:rgba(255,255,255,0.2);">Hosting</a>
         </div>
     </div>
 
@@ -513,6 +556,8 @@ const server = http.createServer((req, res) => {
         const phoneInput = document.getElementById('phoneInput');
         const pairBtn = document.getElementById('pairBtn');
         const qrBtn = document.getElementById('qrBtn');
+        const submitPairBtn = document.getElementById('submitPairBtn');
+        const pairForm = document.getElementById('pairForm');
         const pairingCodeBox = document.getElementById('pairingCodeBox');
         const pairingCodeDisplay = document.getElementById('pairingCodeDisplay');
         const copyPairBtn = document.getElementById('copyPairBtn');
@@ -525,7 +570,7 @@ const server = http.createServer((req, res) => {
             const prefixValue = document.getElementById('prefixValue');
             
             dot.className = 'dot ' + status;
-            const names = {connected:'Connected ✅', connecting:'Connecting...', disconnected:'Disconnected ❌'};
+            const names = {connected:'Connected', connecting:'Connecting...', disconnected:'Disconnected'};
             label.textContent = names[status] || status;
             
             if(prefix) {
@@ -534,9 +579,10 @@ const server = http.createServer((req, res) => {
             }
             
             if(status === 'connected') {
-                msg.innerHTML = 'Bot is <span class="highlight">connected</span> and ready!';
+                msg.innerHTML = 'Bot is <span class="highlight">connected</span> and ready.';
                 document.getElementById('qrPlaceholder').style.display = 'block';
                 document.getElementById('qrImage').style.display = 'none';
+                pairForm.classList.remove('show');
             } else if(status === 'connecting') {
                 msg.innerHTML = 'Bot is <span class="highlight">connecting</span>... Please wait.';
             } else {
@@ -578,17 +624,28 @@ const server = http.createServer((req, res) => {
             } catch(e) { console.error(e); }
         }
 
-        // Pair Code button
-        pairBtn.addEventListener('click', async function() {
-            const phone = prompt('Enter your phone number with country code (e.g., 255712345678):');
-            if(!phone) return;
+        pairBtn.addEventListener('click', function() {
+            if(pairForm.classList.contains('show')) {
+                pairForm.classList.remove('show');
+            } else {
+                pairForm.classList.add('show');
+                phoneInput.focus();
+            }
+        });
+
+        submitPairBtn.addEventListener('click', async function() {
+            const phone = phoneInput.value.trim();
+            if(!phone) {
+                alert('Please enter your phone number with country code (e.g., 255712345678)');
+                return;
+            }
             if(!phone.match(/^[0-9]{10,15}$/)) {
                 alert('Please enter a valid phone number (numbers only)');
                 return;
             }
             
             this.disabled = true;
-            this.innerHTML = '<i class="fa-solid fa-spinner fa-pulse"></i> Generating...';
+            this.innerHTML = '<i class="fa-solid fa-spinner fa-pulse"></i>';
             
             try {
                 const formData = new URLSearchParams();
@@ -602,6 +659,8 @@ const server = http.createServer((req, res) => {
                 if(resp.ok && text.includes('Pairing Code Generated')) {
                     fetchStatus();
                     setTimeout(() => fetchStatus(), 2000);
+                    setTimeout(() => fetchStatus(), 5000);
+                    pairForm.classList.remove('show');
                 } else {
                     alert('Failed to generate pairing code. Make sure bot is connecting.');
                 }
@@ -609,16 +668,18 @@ const server = http.createServer((req, res) => {
                 alert('Error: ' + err.message);
             }
             this.disabled = false;
-            this.innerHTML = '<i class="fa-solid fa-key"></i> Pair Code';
+            this.innerHTML = '<i class="fa-solid fa-link"></i> Generate';
         });
 
-        // Generate QR button
+        phoneInput.addEventListener('keypress', function(e) {
+            if(e.key === 'Enter') submitPairBtn.click();
+        });
+
         qrBtn.addEventListener('click', function() {
             fetchStatus();
-            alert('QR code will appear automatically when bot is in connecting state.\nMake sure you scan it with WhatsApp.');
+            alert('QR code will appear automatically when bot is in connecting state.');
         });
 
-        // Copy pairing code
         copyPairBtn.addEventListener('click', async function() {
             const text = pairingCodeDisplay.textContent;
             if(!text || text === '------') return;
@@ -641,7 +702,7 @@ const server = http.createServer((req, res) => {
             }
         });
 
-        refreshInterval = setInterval(fetchStatus, 2000);
+        refreshInterval = setInterval(fetchStatus, 3000);
         fetchStatus();
         
         window.addEventListener('beforeunload', () => { 
@@ -662,7 +723,7 @@ const server = http.createServer((req, res) => {
                 
                 if (!phoneNumber) {
                     res.writeHead(200, { 'Content-Type': 'text/html' });
-                    res.end(`<center><h2>❌ Error: Phone number required</h2><a href="/">Try Again</a></center>`);
+                    res.end('<center><h2>Error: Phone number required</h2><a href="/">Try Again</a></center>');
                     return;
                 }
 
@@ -670,7 +731,7 @@ const server = http.createServer((req, res) => {
                 
                 if (botStatus !== 'connecting' || !sock) {
                     res.writeHead(200, { 'Content-Type': 'text/html' });
-                    res.end(`<center><h2>⚠️ Bot not ready</h2><p>Status: ${botStatus}</p><p>Please wait for QR code to appear first</p><a href="/">← Go Back</a></center>`);
+                    res.end('<center><h2>Bot not ready</h2><p>Status: ' + botStatus + '</p><p>Please wait for QR code to appear first</p><a href="/">Go Back</a></center>');
                     return;
                 }
 
@@ -692,28 +753,41 @@ const server = http.createServer((req, res) => {
         .btn{display:inline-block;padding:12px 32px;background:linear-gradient(135deg,#ff3b7f,#b967ff);color:#fff;border-radius:16px;text-decoration:none;font-weight:600;margin:10px 5px;border:none;cursor:pointer}
         .btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(255,59,127,0.3)}
         .hint{color:rgba(255,255,255,0.5);font-size:13px;margin-top:16px}
+        .hosting-ad{margin-top:16px;padding:12px;background:rgba(255,59,127,0.05);border-radius:12px}
+        .hosting-ad .title{color:#ff3b7f;font-weight:700;font-size:12px}
+        .hosting-ad .price{color:#fff;font-size:11px}
+        .hosting-ad .panel{color:rgba(255,255,255,0.3);font-size:10px;margin-top:4px}
+        .hosting-ad .link{color:#b967ff;text-decoration:none;font-size:10px}
     </style>
 </head>
 <body>
     <div class="card">
-        <h2 style="color:#ff3b7f;margin-bottom:10px;">✅ Pairing Code Generated</h2>
+        <h2 style="color:#ff3b7f;margin-bottom:10px;">Pairing Code Generated</h2>
         <p style="color:rgba(255,255,255,0.6);font-size:14px;">Phone: <strong style="color:#fff;">${phoneNumber}</strong></p>
         <div class="code">${pairingCode}</div>
         <div style="background:rgba(255,255,255,0.03);border-radius:12px;padding:12px;margin:16px 0;border:1px solid rgba(255,255,255,0.04);">
-            <p style="font-size:13px;color:rgba(255,255,255,0.6);">📱 Go to WhatsApp → Settings → Linked Devices → Link a Device</p>
-            <p style="font-size:13px;color:rgba(255,255,255,0.6);">🔢 Select "Use pairing code" and enter the code above</p>
+            <p style="font-size:13px;color:rgba(255,255,255,0.6);">Open WhatsApp -> Settings -> Linked Devices -> Link a Device</p>
+            <p style="font-size:13px;color:rgba(255,255,255,0.6);">Select "Use pairing code" and enter the code above</p>
         </div>
-        <button class="btn" onclick="navigator.clipboard.writeText('${pairingCode}').then(()=>{this.textContent='✅ Copied!';setTimeout(()=>{this.textContent='📋 Copy Code';},2000)})">📋 Copy Code</button>
-        <br><br>
-        <a href="/" style="color:rgba(255,255,255,0.4);text-decoration:none;font-size:13px;">← Back to Home</a>
+        <button class="btn" onclick="navigator.clipboard.writeText('${pairingCode}').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy Code';},2000)})">Copy Code</button>
+        
+        <div class="hosting-ad">
+            <div class="title">HOST YOUR BOT NOW</div>
+            <div class="price">10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD</div>
+            <div class="panel">Panel & Server Available</div>
+            <a href="https://host.stanymaxhub.online" target="_blank" class="link">host.stanymaxhub.online</a>
+        </div>
+        
+        <br>
+        <a href="/" style="color:rgba(255,255,255,0.4);text-decoration:none;font-size:13px;">Back to Home</a>
     </div>
 </body>
 </html>`);
-                console.log(`✅ Pairing code for ${phoneNumber}: ${pairingCode}`);
+                console.log('Pairing code for ' + phoneNumber + ': ' + pairingCode);
             } catch (error) {
-                console.error('❌ Pair error:', error);
+                console.error('Pair error:', error);
                 res.writeHead(200, { 'Content-Type': 'text/html' });
-                res.end(`<center><h2>❌ Error</h2><p>${error.message}</p><a href="/">↩️ Try Again</a></center>`);
+                res.end('<center><h2>Error</h2><p>' + error.message + '</p><a href="/">Try Again</a></center>');
             }
         });
         return;
@@ -745,27 +819,27 @@ const server = http.createServer((req, res) => {
     
     else {
         res.writeHead(404, { 'Content-Type': 'text/html' });
-        res.end(`<center><h1>404 - Page Not Found</h1><a href="/">🏠 Go Home</a></center>`);
+        res.end('<center><h1>404 - Page Not Found</h1><a href="/">Go Home</a></center>');
     }
 });
 
 server.listen(PORT, () => {
-    console.log(`🌐 Web server running at http://localhost:${PORT}`);
-    console.log(`📁 Session folder: ${path.resolve(AUTH_FOLDER)}`);
+    console.log('Web server running at http://localhost:' + PORT);
+    console.log('Session folder: ' + path.resolve(AUTH_FOLDER));
     loadPrefix();
 });
 
 process.on('SIGINT', () => {
-    console.log('\n👋 Shutting down gracefully...');
+    console.log('Shutting down gracefully...');
     if (presenceInterval) clearInterval(presenceInterval);
     if (sock) sock.end();
     process.exit(0);
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('⚠️ Uncaught Exception:', err);
+    console.error('Uncaught Exception:', err);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('⚠️ Unhandled Rejection:', reason);
+    console.error('Unhandled Rejection:', reason);
 });
