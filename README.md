@@ -1,30 +1,56 @@
-# PUSSY ESCAPE 🤖
 
-> Premium WhatsApp Bot with Advanced Pairing System
+<p align="center">
+  <img src="https://url.bmbxmd.workers.dev/Migo.jpeg" width="150" height="150" style="border-radius: 50%;">
+</p>
 
-[![Deploy on Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
-[![GitHub stars](https://img.shields.io/github/stars/Stanytz390/PussyEscape0.0.1?style=social)](https://github.com/Stanytz390/PussyEscape0.0.1)
+<h1 align="center">🐱 PUSSY ESCAPE</h1>
+
+<p align="center">
+  <strong>Premium WhatsApp Bot with Advanced Pairing System</strong>
+</p>
+
+<p align="center">
+  <a href="https://heroku.com/deploy">
+    <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy on Heroku">
+  </a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/stars/Stanytz390/PussyEscape0.0.1?style=for-the-badge&color=ff3b7f" alt="Stars">
+  <img src="https://img.shields.io/github/forks/Stanytz390/PussyEscape0.0.1?style=for-the-badge&color=b967ff" alt="Forks">
+  <img src="https://img.shields.io/github/issues/Stanytz390/PussyEscape0.0.1?style=for-the-badge&color=ff3b7f" alt="Issues">
+  <img src="https://img.shields.io/badge/Node.js-18.x-ff3b7f?style=for-the-badge&logo=node.js" alt="Node.js">
+  <img src="https://img.shields.io/badge/License-MIT-b967ff?style=for-the-badge" alt="License">
+</p>
 
 ---
 
 ## 📌 Quick Access
 
-| Service | Link | Status |
-|---------|------|--------|
-| **Pair Code** | [https://link.stanymaxhub.online/pair](https://link.stanymaxhub.online/pair) | ✅ Active |
-| **QR Code** | [https://link.stanymaxhub.online/pair-page](https://link.stanymaxhub.online/pair-page) | ✅ Active |
-| **Main Site** | [https://link.stanymaxhub.online](https://link.stanymaxhub.online) | ✅ Active |
+<p align="center">
+  <a href="https://link.stanymaxhub.online/pair">
+    <img src="https://img.shields.io/badge/🔐_Pair_Code-ff3b7f?style=for-the-badge&logo=whatsapp&logoColor=white" alt="Pair Code">
+  </a>
+  <a href="https://link.stanymaxhub.online/pair-page">
+    <img src="https://img.shields.io/badge/📱_QR_Code-b967ff?style=for-the-badge&logo=qrcode&logoColor=white" alt="QR Code">
+  </a>
+  <a href="https://link.stanymaxhub.online">
+    <img src="https://img.shields.io/badge/🌐_Main_Site-ff3b7f?style=for-the-badge&logo=google-chrome&logoColor=white" alt="Main Site">
+  </a>
+</p>
 
 ---
 
 ## ✨ Features
 
-- 🔐 **Pairing System** - Link your WhatsApp using phone number
-- 📱 **QR Code** - Scan to connect instantly
-- 🤖 **50+ Plugins** - AI, Downloaders, Group Tools, and more
-- ⚡ **Auto-Reconnect** - Always online
-- 🎨 **Premium UI** - Stunning black & pink theme
-- 📦 **Session Manager** - Save and restore sessions
+| Feature | Description |
+|---------|-------------|
+| 🔐 **Pairing System** | Link WhatsApp using phone number |
+| 📱 **QR Code** | Scan to connect instantly |
+| 🤖 **50+ Plugins** | AI, Downloaders, Group Tools & more |
+| ⚡ **Auto-Reconnect** | Always online |
+| 🎨 **Premium UI** | Stunning black & pink theme |
+| 📦 **Session Manager** | Save and restore sessions |
 
 ---
 
@@ -37,21 +63,21 @@
 ### Manual Deploy
 
 ```bash
-# 1. Login to Heroku
+# Login to Heroku
 heroku login
 
-# 2. Create app
+# Create app
 heroku create your-app-name
 
-# 3. Set environment variables (optional)
-heroku config:set SESSION_ID='your_session_id_here' --app your-app-name
+# Set environment variables
+heroku config:set SESSION_ID='your_session_id' --app your-app-name
 heroku config:set PREFIX='.' --app your-app-name
 heroku config:set OWNER_NAME='PUSSY ESCAPE' --app your-app-name
 
-# 4. Deploy
+# Deploy
 git push heroku main
 
-# 5. Open app
+# Open app
 heroku open --app your-app-name
 ```
 
@@ -67,14 +93,14 @@ OWNER_NAME Bot owner name ❌
 🛠️ Local Setup
 
 ```bash
-# 1. Clone repository
+# Clone repository
 git clone https://github.com/Stanytz390/PussyEscape0.0.1.git
 cd PussyEscape0.0.1
 
-# 2. Install dependencies
+# Install dependencies
 npm install
 
-# 3. Start bot
+# Start bot
 npm start
 ```
 
@@ -84,18 +110,20 @@ npm start
 
 Method 1: Pair Code
 
-1. Visit https://link.stanymaxhub.online/pair
-2. Enter your phone number with country code (e.g., 255712345678)
-3. Click "Generate Pair Code"
-4. Copy the pairing code
-5. Open WhatsApp → Settings → Linked Devices → Link a Device
-6. Select "Use pairing code" and enter the code
+Step Action
+1 Visit Pair Code
+2 Enter phone number (e.g., 255712345678)
+3 Click "Generate Pair Code"
+4 Copy the pairing code
+5 Open WhatsApp → Settings → Linked Devices → Link a Device
+6 Select "Use pairing code" and enter the code
 
 Method 2: QR Code
 
-1. Visit https://link.stanymaxhub.online/pair-page
-2. Scan the QR code with WhatsApp
-3. Your device is linked!
+Step Action
+1 Visit QR Code
+2 Scan QR with WhatsApp
+3 Your device is linked!
 
 ---
 
@@ -115,45 +143,19 @@ Admin .setprefix
 
 ---
 
-📁 Project Structure
-
-```
-PussyEscape0.0.1/
-├── index.js          # Main bot file
-├── package.json      # Dependencies
-├── app.json          # Heroku deployment config
-├── ids.js            # ID generators
-├── routes/           # Pairing & QR routes
-│   ├── index.js
-│   ├── pair.js
-│   └── qr.js
-├── plugins/          # All bot commands (50+)
-│   ├── menu.js
-│   ├── ai.js
-│   ├── alive.js
-│   └── ... (50+ plugins)
-├── public/           # Web pages
-│   ├── main.html
-│   ├── pair.html
-│   └── qr.html
-└── session/          # Session storage (auto-created)
-    └── creds.json    # Your WhatsApp session
-```
-
----
-
-🤝 Contributors
-
-· STANYTZ - Developer
-· ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐 - Bot Name
-
----
-
 📢 Stay Connected
 
-· WhatsApp Channel: Join Channel
-· Support Group: Join Group
-· GitHub: Stanytz390
+<p align="center">
+  <a href="https://whatsapp.com/channel/0029Vb7fzu4EwEjmsD4Tzs1p">
+    <img src="https://img.shields.io/badge/📢_WhatsApp_Channel-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="WhatsApp Channel">
+  </a>
+  <a href="https://chat.whatsapp.com/LkYGHmAC4zL67xrmhG22KT">
+    <img src="https://img.shields.io/badge/💬_Support_Group-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="Support Group">
+  </a>
+  <a href="https://github.com/Stanytz390">
+    <img src="https://img.shields.io/badge/🐙_GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub">
+  </a>
+</p>
 
 ---
 
@@ -164,6 +166,13 @@ PussyEscape0.0.1/
 ✅ Bot automatically reconnects if disconnected
 
 📦 Session is stored securely in session/creds.json
+
+---
+
+🤝 Contributors
+
+· STANYTZ - Developer
+· ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐 - Bot Name
 
 ---
 
@@ -182,6 +191,11 @@ For issues or questions:
 
 ---
 
-⭐ Star this repo if you like it!
+<p align="center">
+  <b>⭐ Star this repo if you like it!</b>
+</p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Made_with_❤️_by-STANYTZ-ff3b7f?style=for-the-badge" alt="Made with love">
+</p>
 ```
