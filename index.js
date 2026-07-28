@@ -22,7 +22,9 @@ global.generateProfilePicture = generateProfilePicture;
 global.downloadMediaMessage = downloadMediaMessage;
 global.bannedChats = global.bannedChats || [];
 
-// ===== SESSION_ID TO CREDS.JSON =====
+// ============================================================
+//  SESSION HANDLER
+// ============================================================
 const SESSION_DIR = './session';
 const CREDS_PATH = path.join(SESSION_DIR, 'creds.json');
 
@@ -30,39 +32,58 @@ if (!fs.existsSync(SESSION_DIR)) {
     fs.mkdirSync(SESSION_DIR, { recursive: true });
 }
 
-if (process.env.SESSION_ID && !fs.existsSync(CREDS_PATH)) {
+function restoreSessionFromId(sessionId) {
     try {
         let sessionData;
         try {
-            sessionData = JSON.parse(process.env.SESSION_ID);
+            sessionData = JSON.parse(sessionId);
         } catch (e) {
             try {
-                const decoded = Buffer.from(process.env.SESSION_ID, 'base64').toString('utf-8');
+                const decoded = Buffer.from(sessionId, 'base64').toString('utf-8');
                 sessionData = JSON.parse(decoded);
             } catch (e2) {
-                console.error('Invalid SESSION_ID format. Provide valid JSON.');
-                process.exit(1);
+                console.error('Invalid SESSION_ID format');
+                return false;
             }
         }
+        if (!sessionData || typeof sessionData !== 'object') return false;
         fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
         console.log('Session restored from SESSION_ID');
-    } catch (err) {
-        console.error('Error restoring session from SESSION_ID:', err);
+        return true;
+    } catch (error) {
+        console.error('Error restoring session:', error.message);
+        return false;
     }
-} else if (fs.existsSync(CREDS_PATH)) {
-    console.log('Using existing session from creds.json');
 }
 
-if (!fs.existsSync(CREDS_PATH) && global.sessionid) {
+let sessionRestored = false;
+
+if (process.env.SESSION_ID && process.env.SESSION_ID.length > 10) {
+    if (!fs.existsSync(CREDS_PATH) || fs.statSync(CREDS_PATH).size < 100) {
+        sessionRestored = restoreSessionFromId(process.env.SESSION_ID);
+    }
+}
+
+if (!sessionRestored && fs.existsSync(CREDS_PATH)) {
     try {
-        const sessionData = JSON.parse(global.sessionid);
-        fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
-        console.log('Session restored from global.sessionid');
-    } catch (err) {
-        console.error('Error restoring session from global.sessionid:', err);
-    }
+        const data = fs.readFileSync(CREDS_PATH, 'utf8');
+        if (data && data.length > 50) {
+            JSON.parse(data);
+            sessionRestored = true;
+            console.log('Using existing creds.json');
+        }
+    } catch (e) {}
 }
 
+if (!sessionRestored) {
+    console.log('No session found. Bot will start with QR code.');
+} else {
+    console.log('Session ready. Bot will connect automatically.');
+}
+
+// ============================================================
+//  BOT CONFIGURATION
+// ============================================================
 const AUTH_FOLDER = './session';
 const PLUGIN_FOLDER = './plugins';
 const PORT = process.env.PORT || 3000;
@@ -75,6 +96,9 @@ let sock = null;
 let isConnecting = false;
 let welcomeSent = false;
 
+// ============================================================
+//  LOAD PREFIX
+// ============================================================
 function loadPrefix() {
     const configPath = path.join(__dirname, 'config.json');
     if (fs.existsSync(configPath)) {
@@ -88,36 +112,62 @@ function loadPrefix() {
             console.error('Error loading config:', err);
         }
     }
+    if (!global.BOT_PREFIX) {
+        global.BOT_PREFIX = '.';
+        console.log('Using default prefix: .');
+    }
     startBot();
 }
 
+// ============================================================
+//  SEND WELCOME MESSAGE
+// ============================================================
 async function sendWelcomeMessage() {
     if (welcomeSent) return;
     if (!sock) return;
     
     try {
         const username = sock.user?.name || 'User';
-        const welcomeText = `╭─❒ PUSSY ESCAPE
+        const welcomeText = `╭─❒ ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐
 │
 ├─❒ Welcome @${username}
 │
-├─❒ PUSSY ESCAPE MULTIPLE DEVICES
+├─❒ ᴘᴜssʏ ᴇsᴄᴀᴘᴇ ᴍᴜʟᴛɪᴘʟᴇ ᴅᴇᴠɪᴄᴇs
 │
 ├─❒ Status: Connected
 │
 ├─❒ Prefix: ${global.BOT_PREFIX || '.'}
 │
-├─❒ Owner: PUSSY ESCAPE
+├─❒ Owner: ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐
 │
-├─❒ Repo: github.com/Stanytz390
+├─❒ Repo: github.com/Stanytz390/PussyEscape0.0.1
 │
 ├─❒ Pairing: link.stanymaxhub.online/pair
 │
 ├─❒ QR Code: link.stanymaxhub.online/pair-page
 │
+├─❒ Hosting: host.stanymaxhub.online
+│
+├─❒ Deploy: hosting.stanymines.site/services/bots/pussy-escape-1370
+│
+├─❒ Panel: Available
+│
+├─❒ Server: Available
+│
+├─❒ Coins: 10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD
+│
 ╰─❒ Powered by STANYTZ
 
-> Time - Timeless`;
+> Time - Timeless
+
+=======================
+HOST YOUR BOT NOW!
+=======================
+Get premium hosting for your WhatsApp bot.
+Affordable prices starting at 10 coins.
+Visit: host.stanymaxhub.online
+Panel & Server Available.
+=======================`;
 
         await sock.sendMessage(sock.user.id, {
             image: { url: 'https://url.bmbxmd.workers.dev/Migo.jpeg' },
@@ -128,7 +178,7 @@ async function sendWelcomeMessage() {
                 isForwarded: true,
                 forwardedNewsletterMessageInfo: {
                     newsletterJid: '120363404317544295@newsletter',
-                    newsletterName: 'PUSSY ESCAPE Time - Timeless',
+                    newsletterName: 'ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐',
                     serverMessageId: 1
                 }
             }
@@ -140,6 +190,9 @@ async function sendWelcomeMessage() {
     }
 }
 
+// ============================================================
+//  START BOT - ANTI-BAN & ANTI-SLEEP
+// ============================================================
 function startBot() {
     console.log('Starting WhatsApp Bot...');
     isConnecting = true;
@@ -231,6 +284,7 @@ function startBot() {
                         }
                     });
 
+                    // ANTI-SLEEP: Send presence every 60 seconds
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) {
                             sock.sendPresenceUpdate('available');
@@ -239,7 +293,7 @@ function startBot() {
 
                     setTimeout(async () => {
                         await sendWelcomeMessage();
-                    }, 2000);
+                    }, 3000);
                 } 
                 
                 else if (connection === 'connecting') {
@@ -253,6 +307,7 @@ function startBot() {
                 console.log('Credentials updated');
             });
 
+            // ===== LOAD PLUGINS =====
             const plugins = new Map();
             const pluginPath = path.join(__dirname, PLUGIN_FOLDER);
             
@@ -282,6 +337,7 @@ function startBot() {
                 }
             }
            
+            // ===== MESSAGES HANDLER =====
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
                 if (type !== 'notify' && type !== 'append') return;
                 
@@ -350,6 +406,7 @@ function startBot() {
                 }
             });
             
+            // ===== GROUP PARTICIPANTS =====
             sock.ev.on('group-participants.update', async (update) => {
                 try {
                     if (!global.welcomeConfig?.enabled) return
@@ -397,6 +454,9 @@ function startBot() {
     })();
 }
 
+// ============================================================
+//  HTTP SERVER - WITH PAIR FORM & QR
+// ============================================================
 const server = http.createServer((req, res) => {
     const url = req.url;
     
@@ -408,7 +468,7 @@ const server = http.createServer((req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#050510">
-    <title>PUSSY ESCAPE · Bot</title>
+    <title>ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐 · Bot</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
     <style>
@@ -432,13 +492,14 @@ const server = http.createServer((req, res) => {
         .qr-area img{max-width:200px;border-radius:12px;background:#fff;padding:10px}
         .qr-placeholder{color:rgba(255,255,255,0.3);padding:20px}
         
+        /* PAIR FORM - NICE */
         .pair-form{display:none;margin-top:12px;padding:16px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.06)}
         .pair-form.show{display:block}
         .pair-form label{font-size:11px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
         .pair-form .input-group{display:flex;gap:8px}
         .pair-form input{flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03);color:#fff;font-size:14px;outline:none}
         .pair-form input:focus{border-color:#ff3b7f}
-        .pair-form .submit-btn{padding:10px 20px;border:none;border-radius:10px;background:linear-gradient(135deg,#ff3b7f,#b967ff);color:#fff;font-weight:600;cursor:pointer}
+        .pair-form .submit-btn{padding:10px 20px;border:none;border-radius:10px;background:linear-gradient(135deg,#ff3b7f,#b967ff);color:#fff;font-weight:600;cursor:pointer;transition:all 0.3s}
         .pair-form .submit-btn:hover{transform:translateY(-2px)}
         .pair-form .submit-btn:disabled{opacity:0.5;cursor:not-allowed}
         
@@ -446,7 +507,8 @@ const server = http.createServer((req, res) => {
         .pairing-code-box.show{display:block}
         .pairing-code-box .code{font-size:28px;font-weight:900;color:#ff3b7f;text-align:center;letter-spacing:6px;font-family:monospace;padding:8px 0}
         .pairing-code-box .label{font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:2px;text-align:center;display:block}
-        .pairing-code-box .copy-btn{background:#ff3b7f;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;margin-top:8px;width:100%}
+        .pairing-code-box .copy-btn{background:#ff3b7f;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;margin-top:8px;width:100%;transition:all 0.3s}
+        .pairing-code-box .copy-btn:hover{transform:scale(1.02)}
         
         .btn-group{display:flex;gap:10px;margin-top:12px}
         .btn{flex:1;padding:12px;border:none;border-radius:12px;font-weight:700;font-size:13px;cursor:pointer;transition:all 0.3s}
@@ -459,12 +521,18 @@ const server = http.createServer((req, res) => {
         .footer{margin-top:20px;text-align:center;font-size:10px;color:rgba(255,255,255,0.2)}
         .footer a{color:rgba(255,255,255,0.3);text-decoration:none}
         .prefix-display{font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:8px}
+        .hosting-ad{margin-top:12px;padding:12px;background:rgba(255,59,127,0.05);border:1px solid rgba(255,59,127,0.08);border-radius:12px;text-align:center}
+        .hosting-ad .title{color:#ff3b7f;font-weight:700;font-size:12px}
+        .hosting-ad .desc{color:rgba(255,255,255,0.4);font-size:10px;margin-top:4px}
+        .hosting-ad .price{color:#fff;font-weight:600;font-size:11px;margin-top:4px}
+        .hosting-ad .link{color:#b967ff;text-decoration:none;font-size:10px}
+        .hosting-ad .panel{color:rgba(255,255,255,0.3);font-size:10px;margin-top:4px}
     </style>
 </head>
 <body>
     <div class="container">
         <img src="https://url.bmbxmd.workers.dev/Migo.jpeg" class="logo" onerror="this.style.display='none'">
-        <h1>PUSSY<span>ESCAPE</span></h1>
+        <h1>ᴘᴜssʏ<span>ᴇsᴄᴀᴘᴇ</span></h1>
         <div class="sub">WhatsApp Bot</div>
         <div class="card">
             <div class="status">
@@ -508,10 +576,20 @@ const server = http.createServer((req, res) => {
                 <span id="statusMessage">Bot is <span class="highlight">disconnected</span>. Use Pair Code or QR to connect.</span>
             </div>
             <div class="prefix-display">Command prefix: <span id="prefixValue">.</span></div>
+            
+            <div class="hosting-ad">
+                <div class="title">HOST YOUR BOT NOW</div>
+                <div class="desc">Get premium hosting for your WhatsApp bot</div>
+                <div class="price">10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD</div>
+                <div class="panel">Panel & Server Available</div>
+                <a href="https://host.stanymaxhub.online" target="_blank" class="link">host.stanymaxhub.online</a>
+            </div>
         </div>
         <div class="footer">
             Developed by <a href="tel:+255787069580">STANYTZ</a><br>
-            &copy; 2026 PUSSY ESCAPE
+            &copy; 2026 ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐<br>
+            <a href="https://github.com/Stanytz390/PussyEscape0.0.1" target="_blank" style="color:rgba(255,255,255,0.2);">GitHub Repo</a> | 
+            <a href="https://host.stanymaxhub.online" target="_blank" style="color:rgba(255,255,255,0.2);">Hosting</a>
         </div>
     </div>
 
@@ -678,6 +756,7 @@ const server = http.createServer((req, res) => {
 </html>`);
     } 
     
+    // ===== PAIR API =====
     else if (url === '/pair' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -718,6 +797,11 @@ const server = http.createServer((req, res) => {
         .btn{display:inline-block;padding:12px 32px;background:linear-gradient(135deg,#ff3b7f,#b967ff);color:#fff;border-radius:16px;text-decoration:none;font-weight:600;margin:10px 5px;border:none;cursor:pointer}
         .btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(255,59,127,0.3)}
         .hint{color:rgba(255,255,255,0.5);font-size:13px;margin-top:16px}
+        .hosting-ad{margin-top:16px;padding:12px;background:rgba(255,59,127,0.05);border-radius:12px}
+        .hosting-ad .title{color:#ff3b7f;font-weight:700;font-size:12px}
+        .hosting-ad .price{color:#fff;font-size:11px}
+        .hosting-ad .panel{color:rgba(255,255,255,0.3);font-size:10px;margin-top:4px}
+        .hosting-ad .link{color:#b967ff;text-decoration:none;font-size:10px}
     </style>
 </head>
 <body>
@@ -730,7 +814,15 @@ const server = http.createServer((req, res) => {
             <p style="font-size:13px;color:rgba(255,255,255,0.6);">Select "Use pairing code" and enter the code above</p>
         </div>
         <button class="btn" onclick="navigator.clipboard.writeText('${pairingCode}').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy Code';},2000)})">Copy Code</button>
-        <br><br>
+        
+        <div class="hosting-ad">
+            <div class="title">HOST YOUR BOT NOW</div>
+            <div class="price">10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD</div>
+            <div class="panel">Panel & Server Available</div>
+            <a href="https://host.stanymaxhub.online/services/bots/pussy-escape-1370" target="_blank" class="link">host.stanymaxhub.online</a>
+        </div>
+        
+        <br>
         <a href="/" style="color:rgba(255,255,255,0.4);text-decoration:none;font-size:13px;">Back to Home</a>
     </div>
 </body>
@@ -745,6 +837,7 @@ const server = http.createServer((req, res) => {
         return;
     }
     
+    // ===== API STATUS =====
     else if (url === '/api/status') {
         let pairingCode = null;
         for (const [_, data] of pairingCodes) {
@@ -782,7 +875,7 @@ server.listen(PORT, () => {
 });
 
 process.on('SIGINT', () => {
-    console.log('Shutting down gracefully...');
+    console.log('\nShutting down gracefully...');
     if (presenceInterval) clearInterval(presenceInterval);
     if (sock) sock.end();
     process.exit(0);
