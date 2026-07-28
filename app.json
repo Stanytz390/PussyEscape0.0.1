@@ -1,0 +1,44 @@
+{
+  "name": "PUSSY ESCAPE - WhatsApp Bot",
+  "description": "Premium WhatsApp Bot with Pairing System",
+  "repository": "https://github.com/Stanytz390/PussyEscape0.0.1",
+  "logo": "https://url.bmbxmd.workers.dev/Migo.jpeg",
+  "keywords": ["whatsapp", "bot", "baileys", "whatsapp-bot", "pairing"],
+  "env": {
+    "SESSION_ID": {
+      "description": "Your WhatsApp session ID (creds.json content)",
+      "required": true,
+      "value": ""
+    },
+    "PREFIX": {
+      "description": "Bot command prefix (default: .)",
+      "required": false,
+      "value": "."
+    },
+    "OWNER_NAME": {
+      "description": "Bot owner name",
+      "required": false,
+      "value": "ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐"
+    },
+    "MENU_IMAGE": {
+      "description": "Image URL for menu",
+      "required": false,
+      "value": "https://url.bmbxmd.workers.dev/Migo.jpeg"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "addons": [],
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "scripts": {
+    "postdeploy": "npm install"
+  }
+}
