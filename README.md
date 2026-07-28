@@ -12,9 +12,11 @@
 
 ## 🚀 Deploy to Heroku
 
-(https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Stanytz390/PussyEscape0.0.1)
+<p align="center">
+<a href="https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Stanytz390/PussyEscape0.0.1">
+<img src="https://www.herokucdn.com/deploy/button.svg"
 
-Click the button above to deploy instantly! 
+alt="Click the button above to deploy instantly!">
 
 
 <p align="center">
