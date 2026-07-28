@@ -12,12 +12,15 @@
 
 ## 🚀 Deploy to Heroku
 
+## 🚀 Deploy to Heroku
+
 <p align="center">
-<a href="https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Stanytz390/PussyEscape0.0.1">
-<img src="https://www.herokucdn.com/deploy/button.svg"
+  <a href="https://heroku.com/deploy?template=https://github.com/Stanytz390/PussyEscape0.0.1">
+    <img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy on Heroku">
+  </a>
+</p>
 
-alt="Click the button above to deploy instantly!">
-
+Click the button above to deploy the bot instantly on Heroku.
 
 <p align="center">
   <a href="https://heroku.com/deploy">
