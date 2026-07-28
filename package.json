@@ -1,7 +1,7 @@
 {
-  "name": "Xlicon",
-  "version": "1.0.0",
-  "description": "Xlicon WhatsApp Bot",
+  "name": "stanytz",
+  "version": "0.0.1",
+  "description": "stanytz WhatsApp Bot",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
