@@ -12,7 +12,7 @@ module.exports = {
                 text: `Tap any button below to execute the command instantly:\n\n` +
                       `Current prefix: *${global.BOT_PREFIX}*\n\n` +
                       '> 「 𝙏𝙞𝙢𝙚 - 𝙏𝙞𝙢𝙚𝙡𝙚𝙨𝙨 」',
-                footer: 'Instant commands • https://meetus. stanymaxhub.online',
+                footer: 'Instant commands • https://meetus.stanymaxhub.online',
                 interactiveButtons: [
                     {
                         name: 'quick_reply',
