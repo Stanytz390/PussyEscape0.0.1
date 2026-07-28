@@ -8,7 +8,7 @@ module.exports = {
     async execute(sock, m) {
         try {
             const owners = [
-                ['255618558501@s.whatsapp.net', 'STANYTZ']
+                ['255618558502@s.whatsapp.net', 'STANYTZ']
             ];
 
             const contacts = owners.map(([id, name]) => ({
