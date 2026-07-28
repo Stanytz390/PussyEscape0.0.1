@@ -10,9 +10,7 @@
 </p>
 
 
-## 🚀 Deploy to Heroku
-
-## 🚀 Deploy to Heroku
+## 🚀 Deploy to Heroku Automatically
 
 <p align="center">
   <a href="https://heroku.com/deploy?template=https://github.com/Stanytz390/PussyEscape0.0.1">
@@ -21,6 +19,9 @@
 </p>
 
 Click the button above to deploy the bot instantly on Heroku.
+
+
+## 🚀 Deploy to Heroku Manually 
 
 <p align="center">
   <a href="https://heroku.com/deploy">
