@@ -8,9 +8,11 @@
 <p align="center">
   <strong>Premium WhatsApp Bot with Advanced Pairing System</strong>
 </p>
+
+
 ## 🚀 Deploy to Heroku
 
-[![Deploy on Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Stanytz390/PussyEscape0.0.1)
+(https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/Stanytz390/PussyEscape0.0.1)
 
 Click the button above to deploy instantly! 
 
