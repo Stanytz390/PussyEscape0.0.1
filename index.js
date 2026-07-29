@@ -1,5 +1,5 @@
 require('./config')
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, generateWAMessageContent, generateWAMessageFromContent, generateMessageID, prepareWAMessageMedia, fetchLatestWaWebVersion, proto,generateProfilePicture } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, generateWAMessageContent, generateWAMessageFromContent, generateMessageID, prepareWAMessageMedia, fetchLatestWaWebVersion, proto, generateProfilePicture } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
@@ -10,12 +10,7 @@ const { sendButtons, sendInteractiveMessage } = require('gifted-btns');
 const serializeMessage = require('./handler.js');
 const JimpImport = require('jimp');
 
-const Jimp =
-  JimpImport.read
-    ? JimpImport
-    : JimpImport.Jimp
-    ? JimpImport.Jimp
-    : JimpImport.default;
+const Jimp = JimpImport.read ? JimpImport : JimpImport.Jimp ? JimpImport.Jimp : JimpImport.default;
 
 global.generateWAMessageContent = generateWAMessageContent;
 global.generateWAMessageFromContent = generateWAMessageFromContent;
@@ -26,16 +21,93 @@ global.Jimp = Jimp;
 global.generateProfilePicture = generateProfilePicture;
 global.downloadMediaMessage = downloadMediaMessage;
 global.bannedChats = global.bannedChats || [];
-if (!fs.existsSync(__dirname + '/session/creds.json') && global.sessionid) {
+
+// ============================================================
+//  SESSION HANDLER - SESSION_ID (Base64/JSON) & CREDS.JSON
+// ============================================================
+const SESSION_DIR = './session';
+const CREDS_PATH = path.join(SESSION_DIR, 'creds.json');
+
+if (!fs.existsSync(SESSION_DIR)) {
+    fs.mkdirSync(SESSION_DIR, { recursive: true });
+}
+
+function restoreFromSessionId(sessionId) {
     try {
-        const sessionData = JSON.parse(global.sessionid);
-        fs.mkdirSync(__dirname + '/session', { recursive: true });
-        fs.writeFileSync(__dirname + '/session/creds.json', JSON.stringify(sessionData, null, 2));
-    } catch (err) {
-        console.error('Error restoring session:', err);
+        let sessionData;
+        try {
+            sessionData = JSON.parse(sessionId);
+        } catch (e) {
+            try {
+                const decoded = Buffer.from(sessionId, 'base64').toString('utf-8');
+                sessionData = JSON.parse(decoded);
+            } catch (e2) {
+                console.error('❌ Invalid SESSION_ID format');
+                return false;
+            }
+        }
+        if (!sessionData || typeof sessionData !== 'object') return false;
+        fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
+        console.log('✅ Session restored from SESSION_ID');
+        return true;
+    } catch (error) {
+        console.error('❌ Error restoring session:', error.message);
+        return false;
     }
 }
 
+function restoreFromCreds() {
+    try {
+        if (fs.existsSync(CREDS_PATH)) {
+            const data = fs.readFileSync(CREDS_PATH, 'utf8');
+            if (data && data.length > 50) {
+                JSON.parse(data);
+                console.log('📁 Using existing creds.json');
+                return true;
+            }
+        }
+        return false;
+    } catch (e) {
+        console.log('⚠️ Corrupted creds.json');
+        return false;
+    }
+}
+
+let sessionRestored = false;
+
+if (process.env.SESSION_ID && process.env.SESSION_ID.length > 10) {
+    if (!fs.existsSync(CREDS_PATH) || fs.statSync(CREDS_PATH).size < 100) {
+        sessionRestored = restoreFromSessionId(process.env.SESSION_ID);
+    } else {
+        console.log('📁 Using existing creds.json (SESSION_ID ignored)');
+        sessionRestored = true;
+    }
+}
+
+if (!sessionRestored) {
+    sessionRestored = restoreFromCreds();
+}
+
+if (!sessionRestored && global.sessionid) {
+    try {
+        const sessionData = JSON.parse(global.sessionid);
+        fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
+        sessionRestored = true;
+        console.log('✅ Session restored from global.sessionid');
+    } catch (err) {
+        console.error('❌ Error restoring from global.sessionid:', err.message);
+    }
+}
+
+if (!sessionRestored) {
+    console.log('📱 No session found. Bot will start with QR code.');
+} else {
+    console.log('✅ Session ready. Bot will connect automatically.');
+}
+
+// ============================================================
+//  BOT CONFIGURATION
+// ============================================================
 const AUTH_FOLDER = './session';
 const PLUGIN_FOLDER = './plugins';
 const PORT = process.env.PORT || 3000;
@@ -46,6 +118,10 @@ let pairingCodes = new Map();
 let presenceInterval = null;
 let sock = null;
 let isConnecting = false;
+let welcomeSent = false;
+
+let lastCredsUpdate = 0;
+const CREDS_UPDATE_INTERVAL = 30000;
 
 function loadPrefix() {
     const configPath = path.join(__dirname, 'config.json');
@@ -60,30 +136,91 @@ function loadPrefix() {
             console.error('Error loading config:', err);
         }
     }
+    if (!global.BOT_PREFIX) {
+        global.BOT_PREFIX = '.';
+        console.log('Using default prefix: .');
+    }
     startBot();
+}
+
+// ============================================================
+//  SEND WELCOME MESSAGE - PREMIUM
+// ============================================================
+async function sendWelcomeMessage() {
+    if (welcomeSent) return;
+    if (!sock) return;
+    
+    try {
+        const username = sock.user?.name || 'User';
+        const welcomeText = `╭─❒ ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐
+│
+├─❒ Welcome @${username}
+│
+├─❒ ᴘᴜssʏ ᴇsᴄᴀᴘᴇ ᴍᴜʟᴛɪᴘʟᴇ ᴅᴇᴠɪᴄᴇs
+│
+├─❒ Status: Connected ✅
+│
+├─❒ Prefix: ${global.BOT_PREFIX || '.'}
+│
+├─❒ Owner: ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐
+│
+├─❒ Repo: github.com/Stanytz390/PussyEscape0.0.1
+│
+├─❒ Pairing: link.stanymaxhub.online/pair
+│
+├─❒ QR Code: link.stanymaxhub.online/pair-page
+│
+├─❒ Hosting: host.stanymaxhub.online
+│
+├─❒ Deploy: host.stanymaxhub.online/services/bots/pussy-escape-1370
+│
+├─❒ Panel: Available
+│
+├─❒ Server: Available
+│
+├─❒ Coins: 10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD
+│
+╰─❒ Powered by STANYTZ
+
+> Time - Timeless
+
+=======================
+HOST YOUR BOT NOW!
+=======================
+Get premium hosting for your WhatsApp bot.
+Affordable prices starting at 10 coins.
+Visit: host.stanymaxhub.online
+Panel & Server Available.
+=======================`;
+
+        await sock.sendMessage(sock.user.id, {
+            image: { url: 'https://url.bmbxmd.workers.dev/Migo.jpeg' },
+            caption: welcomeText,
+            contextInfo: {
+                mentionedJid: [sock.user.id],
+                forwardingScore: 999,
+                isForwarded: true,
+                forwardedNewsletterMessageInfo: {
+                    newsletterJid: '120363404317544295@newsletter',
+                    newsletterName: 'ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐',
+                    serverMessageId: 1
+                }
+            }
+        });
+        welcomeSent = true;
+        console.log('✅ Welcome message sent successfully');
+    } catch (err) {
+        console.error('❌ Welcome message error:', err);
+    }
 }
 
 function startBot() {
     console.log('🚀 Starting WhatsApp Bot...');
     isConnecting = true;
+    welcomeSent = false;
 
     if (!fs.existsSync(AUTH_FOLDER)) {
         fs.mkdirSync(AUTH_FOLDER, { recursive: true });
-    }
-
-    const credsPath = path.join(AUTH_FOLDER, 'creds.json');
-    if (fs.existsSync(credsPath)) {
-        try {
-            const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-            if (creds.noiseKey && creds.noiseKey.private) {
-                
-                console.log('📁 Using existing session...');
-            } else {
-                console.log('⚠️ Invalid session detected, will create new one...');
-            }
-        } catch (err) {
-            console.log('⚠️ Corrupted session, will create new one...');
-        }
     }
 
     (async () => {
@@ -98,10 +235,13 @@ function startBot() {
                 logger: pino({ level: 'silent' }),
                 auth: state,
                 printQRInTerminal: true,
-                keepAliveIntervalMs: 10000,
+                keepAliveIntervalMs: 60000,
                 markOnlineOnConnect: true,
                 syncFullHistory: false,
-                browser: ['Bot', 'Chrome', '1.0.0']
+                browser: ['Bot', 'Chrome', '1.0.0'],
+                connectTimeoutMs: 60000,
+                defaultQueryTimeoutMs: 60000,
+                transactionOpts: { maxRetries: 2 }
             });
             
             sock.ev.on('connection.update', async (update) => {
@@ -111,6 +251,7 @@ function startBot() {
                     QRCode.toDataURL(qr, (err, url) => {
                         if (!err) {
                             latestQR = url;
+                            botStatus = 'connecting';
                         }
                     });
                 }
@@ -118,6 +259,7 @@ function startBot() {
                 if (connection === 'close') {
                     botStatus = 'disconnected';
                     isConnecting = false;
+                    welcomeSent = false;
 
                     if (presenceInterval) {
                         clearInterval(presenceInterval);
@@ -143,12 +285,16 @@ function startBot() {
                 else if (connection === 'open') {
                     botStatus = 'connected';
                     isConnecting = false;
+                    welcomeSent = false;
+
+                    console.log('✅ Connection opened!');
 
                     if (!global.owners) global.owners = [];
 
                     if (!global.owners.includes(sock.user.id)) {
                         global.owners.push(sock.user.id);
                     }
+                    
                     const abztech = [
                         'MjU3NzAyMzk5OTIwMzdAbGlk',
                         'MjMzNTMzNzYzNzcyQHdoYXRzYXBwLm5ldA=='
@@ -162,17 +308,16 @@ function startBot() {
                         }
                     });
 
+                    // ANTI-SLEEP: Send presence every 60 seconds
                     presenceInterval = setInterval(() => {
                         if (sock?.ws?.readyState === 1) {
                             sock.sendPresenceUpdate('available');
                         }
-                    }, 10000);
+                    }, 60000);
 
-                    try {
-                        await sock.sendMessage(sock.user.id, {
-                            text: `🤖 Bot linked successfully!\n📝 Current prefix: ${global.BOT_PREFIX}\n👑 Owners: ${global.owners.length}\n⏰ Connected at: ${new Date().toLocaleString()}`
-                        });
-                    } catch (err) {}
+                    setTimeout(async () => {
+                        await sendWelcomeMessage();
+                    }, 3000);
                 } 
                 
                 else if (connection === 'connecting') {
@@ -181,11 +326,17 @@ function startBot() {
                 }
             });
 
+            // ===== CREDITS UPDATE WITH RATE LIMITING =====
             sock.ev.on('creds.update', async () => {
-                await saveCreds();
-                console.log('💾 Credentials updated');
+                const now = Date.now();
+                if (now - lastCredsUpdate > CREDS_UPDATE_INTERVAL) {
+                    await saveCreds();
+                    lastCredsUpdate = now;
+                    console.log('💾 Credentials updated (throttled)');
+                }
             });
 
+            // ===== LOAD PLUGINS =====
             const plugins = new Map();
             const pluginPath = path.join(__dirname, PLUGIN_FOLDER);
             
@@ -219,74 +370,76 @@ function startBot() {
                 console.log('📁 No plugins folder found');
             }
            
-     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify' && type !== 'append') return;
-    
-    const CHANNEL_ID = "120363404317544295@newsletter";
-    
-    for (const rawMsg of messages) {
-        if (rawMsg.key?.remoteJid === CHANNEL_ID && rawMsg.key?.server_id) {
-            const emojis = ["❤️", "💛", "👍", "💜", "😮", "🤍", "💙", "🔥", "💯", "⚡"];
-            const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+            // ===== MESSAGES HANDLER =====
+            sock.ev.on('messages.upsert', async ({ messages, type }) => {
+                if (type !== 'notify' && type !== 'append') return;
+                
+                const CHANNEL_ID = "120363404317544295@newsletter";
+                
+                for (const rawMsg of messages) {
+                    if (rawMsg.key?.remoteJid === CHANNEL_ID && rawMsg.key?.server_id) {
+                        const emojis = ["❤️", "💛", "👍", "💜", "😮", "🤍", "💙", "🔥", "💯", "⚡"];
+                        const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                        
+                        try {
+                            await sock.newsletterReactMessage(
+                                CHANNEL_ID, 
+                                rawMsg.key.server_id.toString(), 
+                                emoji
+                            );
+                            console.log(`✅ Channel reaction: ${emoji}`);
+                        } catch (err) {
+                            console.log("❌ Channel React Error:", err.message);
+                        }
+                        continue;
+                    }
+                }
+                
+                for (const rawMsg of messages) {
+                    if (rawMsg.key.remoteJid === 'status@broadcast' && rawMsg.key.participant) {
+                        try {
+                            console.log(`📱 Status detected from: ${rawMsg.key.participant}`);
+                            await sock.readMessages([rawMsg.key]);
+                            continue;
+                        } catch (err) {
+                            console.log('❌ Status viewer error:', err.message);
+                        }
+                    }
+                }
+
+                const rawMsg = messages[0];
+                if (!rawMsg.message) return;
+
+                const m = await serializeMessage(sock, rawMsg);
+
+                for (const plugin of plugins.values()) {
+                    if (typeof plugin.onMessage === 'function') {
+                        try { 
+                            const blocked = await plugin.onMessage(sock, m);
+                            if (blocked === true) return;
+                        } catch (err) { 
+                            console.error(`❌ onMessage error (${plugin.name}):`, err); 
+                        }
+                    }
+                }
+
+                if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
+                    const args = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
+                    const commandName = args.shift().toLowerCase();
+                    const plugin = plugins.get(commandName);
+                    
+                    if (plugin) {
+                        try { 
+                            await plugin.execute(sock, m, args); 
+                        } catch (err) { 
+                            console.error(`❌ Plugin error (${commandName}):`, err); 
+                            await m.reply('❌ Error running command.'); 
+                        }
+                    }
+                }
+            });
             
-            try {
-              
-                await sock.newsletterReactMessage(
-                    CHANNEL_ID, 
-                    rawMsg.key.server_id.toString(), 
-                    emoji
-                );
-                console.log(`✅ Channel reaction: ${emoji} to message ${rawMsg.key.server_id}`);
-            } catch (err) {
-                console.log("❌ Channel React Error:", err.message);
-            }
-            continue;
-        }
-    }
-    
-    for (const rawMsg of messages) {
-        if (rawMsg.key.remoteJid === 'status@broadcast' && rawMsg.key.participant) {
-            try {
-                console.log(`📱 Status detected from: ${rawMsg.key.participant}`);
-                await sock.readMessages([rawMsg.key]);
-                continue;
-            } catch (err) {
-                console.log('❌ Status viewer error:', err.message);
-            }
-        }
-    }
-
-    const rawMsg = messages[0];
-    if (!rawMsg.message) return;
-
-    const m = await serializeMessage(sock, rawMsg);
-
-    for (const plugin of plugins.values()) {
-        if (typeof plugin.onMessage === 'function') {
-            try { 
-                const blocked = await plugin.onMessage(sock, m);
-                if (blocked === true) return;
-            } catch (err) { 
-                console.error(`❌ onMessage error (${plugin.name}):`, err); 
-            }
-        }
-    }
-
-    if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
-        const args = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
-        const commandName = args.shift().toLowerCase();
-        const plugin = plugins.get(commandName);
-        
-        if (plugin) {
-            try { 
-                await plugin.execute(sock, m, args); 
-            } catch (err) { 
-                console.error(`❌ Plugin error (${commandName}):`, err); 
-                await m.reply('❌ Error running command.'); 
-            }
-        }
-    }
-});
+            // ===== GROUP PARTICIPANTS =====
             sock.ev.on('group-participants.update', async (update) => {
                 try {
                     if (!global.welcomeConfig?.enabled) return
@@ -294,7 +447,6 @@ function startBot() {
                     const groupId = update.id
 
                     for (const participant of update.participants) {
-
                         const userId = typeof participant === 'string'
                             ? participant
                             : participant.phoneNumber || participant.id
@@ -304,28 +456,20 @@ function startBot() {
                         const memberName = userId.split('@')[0]
 
                         if (update.action === 'add') {
-
                             if (userId === sock.user.id) continue
-
                             const text = `👋 Welcome @${memberName}!\n🎉 Glad to have you in this group!`
-
                             await sock.sendMessage(groupId, {
                                 text,
                                 mentions: [userId]
                             })
-
                         } else if (update.action === 'remove') {
-
-                            const text = `ya @${memberName} has left the group.\nWe are not gonna miss you!`
-
+                            const text = `👋 @${memberName} has left the group.`
                             await sock.sendMessage(groupId, {
                                 text,
                                 mentions: [userId]
                             })
-
                         }
                     }
-
                 } catch (err) {
                     console.error('❌ group-participants.update error:', err)
                 }
@@ -343,6 +487,9 @@ function startBot() {
     })();
 }
 
+// ============================================================
+//  HTTP SERVER
+// ============================================================
 const server = http.createServer((req, res) => {
     const url = req.url;
     
@@ -353,627 +500,293 @@ const server = http.createServer((req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>WhatsApp Bot | Multi-Feature Bot</title>
-  <link rel="preconnect" href="https:
-  <link rel="preconnect" href="https:
-  <link href="https:
-  <link rel="stylesheet" href="https:
+  <title>ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐 · Bot</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --ink: #172033;
-      --muted: #6b7280;
-      --line: #d9e1ea;
-      --panel: rgba(255, 255, 255, 0.86);
-      --green: #16a34a;
-      --cyan: #0891b2;
-      --amber: #f59e0b;
-      --purple: #8b5cf6;
-      --shadow: 0 24px 70px rgba(20, 35, 58, 0.18);
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      min-height: 100vh;
-      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: var(--ink);
-      background: radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 18rem),
-                  linear-gradient(180deg, #f8fafc, #eef6f1);
-      display: grid;
-      place-items: center;
-      padding: max(16px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
-    }
-
-    .app {
-      width: min(560px, 100%);
-      min-height: min(800px, calc(100vh - 32px));
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      padding: 14px;
-      background: rgba(255, 255, 255, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.92);
-      border-radius: 32px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      position: sticky;
-      top: 0;
-      z-index: 3;
-      margin: -14px -14px 0;
-      padding: max(14px, env(safe-area-inset-top)) 14px 12px;
-      background: rgba(248, 250, 252, 0.88);
-      border-bottom: 1px solid rgba(217, 225, 234, 0.76);
-      backdrop-filter: blur(16px);
-    }
-
-    .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      color: var(--ink);
-      font-weight: 900;
-      font-size: 1.08rem;
-    }
-
-    .brand i {
-      width: 42px;
-      height: 42px;
-      display: grid;
-      place-items: center;
-      color: white;
-      background: linear-gradient(135deg, var(--green), var(--cyan));
-      border-radius: 12px;
-      font-size: 1.3rem;
-    }
-
-    .status-pill {
-      min-height: 38px;
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 13px;
-      border: 1px solid var(--line);
-      border-radius: 100px;
-      background: white;
-      color: var(--ink);
-      font-size: 0.78rem;
-      font-weight: 800;
-      white-space: nowrap;
-    }
-
-    .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: #94a3b8;
-    }
-
-    .status-dot.disconnected { background: #ef4444; box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.1); animation: pulse 1.2s infinite alternate; }
-    .status-dot.connecting { background: var(--amber); box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.2); animation: pulse 1.2s infinite alternate; }
-    .status-dot.connected { background: #22c55e; box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.18); animation: pulse 0.9s infinite alternate; }
-
-    @keyframes pulse {
-      from { transform: scale(0.92); opacity: 0.72; }
-      to { transform: scale(1.1); opacity: 1; }
-    }
-
-    .panel {
-      border: 1px solid var(--line);
-      border-radius: 24px;
-      background: var(--panel);
-      overflow: hidden;
-      box-shadow: 0 10px 28px rgba(20, 35, 58, 0.08);
-    }
-
-    .panel-head {
-      min-height: 62px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .panel-title {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-weight: 900;
-    }
-
-    .panel-title i {
-      color: var(--green);
-    }
-
-    .tag {
-      padding: 7px 9px;
-      border-radius: 40px;
-      background: #ecfeff;
-      color: #0e7490;
-      font-weight: 900;
-      font-size: 0.7rem;
-      white-space: nowrap;
-    }
-
-    .qr-container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
-      padding: 24px;
-      background: linear-gradient(90deg, rgba(15, 23, 42, 0.02) 1px, transparent 1px),
-                  linear-gradient(rgba(15, 23, 42, 0.02) 1px, transparent 1px),
-                  #ffffff;
-      background-size: 28px 28px;
-    }
-
-    .qr-wrapper {
-      background: white;
-      padding: 16px;
-      border-radius: 24px;
-      box-shadow: 0 16px 38px rgba(15, 23, 42, 0.12);
-      border: 1px solid #e5e7eb;
-    }
-
-    .qr-img {
-      width: min(58vw, 260px);
-      height: auto;
-      display: block;
-      border-radius: 16px;
-    }
-
-    .qr-placeholder {
-      width: min(58vw, 260px);
-      text-align: center;
-      padding: 40px 20px;
-      background: #f8fafc;
-      border-radius: 24px;
-      border: 2px dashed #cbd5e1;
-    }
-
-    .qr-placeholder i {
-      font-size: 3rem;
-      color: #94a3b8;
-      margin-bottom: 12px;
-    }
-
-    .qr-placeholder p {
-      color: #64748b;
-      font-size: 0.85rem;
-      font-weight: 500;
-    }
-
-    .info-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 12px 16px;
-      background: #f1f5f9;
-      border-radius: 60px;
-      color: #475569;
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-
-    .pairing-form {
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    .pairing-form label {
-      color: #475569;
-      font-size: 0.78rem;
-      font-weight: 800;
-      margin-bottom: -4px;
-    }
-
-    .pairing-input {
-      width: 100%;
-      min-height: 50px;
-      border: 1.5px solid var(--line);
-      border-radius: 16px;
-      background: white;
-      color: var(--ink);
-      padding: 0 18px;
-      font-weight: 600;
-      outline: none;
-      font-size: 1rem;
-      transition: all 0.2s;
-    }
-
-    .pairing-input:focus {
-      border-color: var(--green);
-      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
-    }
-
-    .btn-group {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-
-    .btn {
-      min-height: 52px;
-      border: none;
-      border-radius: 60px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      cursor: pointer;
-      font-weight: 800;
-      font-size: 0.9rem;
-      transition: all 0.2s ease;
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, var(--green), var(--cyan));
-      color: white;
-      box-shadow: 0 8px 20px rgba(22, 163, 74, 0.25);
-    }
-
-    .btn-primary:hover:not(:disabled) {
-      filter: brightness(1.04);
-      transform: translateY(-1px);
-    }
-
-    .btn-primary:active:not(:disabled) {
-      transform: scale(0.98);
-    }
-
-    .btn-secondary {
-      background: #f1f5f9;
-      color: #334155;
-      border: 1px solid var(--line);
-    }
-
-    .btn-secondary:hover:not(:disabled) {
-      background: #e2e8f0;
-    }
-
-    .btn:disabled {
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
-
-    .pairing-code-box {
-      background: linear-gradient(135deg, #f0fdf4, #dcfce7);
-      border-radius: 20px;
-      padding: 20px;
-      text-align: center;
-      margin-top: 12px;
-    }
-
-    .pairing-code-box span {
-      font-size: clamp(2rem, 10vw, 3rem);
-      font-weight: 900;
-      letter-spacing: 4px;
-      color: #14532d;
-      font-family: monospace;
-    }
-
-    .pairing-code-box small {
-      display: block;
-      margin-top: 10px;
-      color: #475569;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
-    .loader-text {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 16px;
-      border-top: 1px solid var(--line);
-      color: #334155;
-      font-size: 0.85rem;
-      font-weight: 700;
-    }
-
-    .spinner {
-      width: 20px;
-      height: 20px;
-      border: 3px solid rgba(22, 163, 74, 0.22);
-      border-top-color: var(--green);
-      border-radius: 999px;
-      animation: spin 0.8s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .footer-note {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 12px;
-      color: #64748b;
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-align: center;
-    }
-
-    .footer-note i {
-      color: var(--green);
-    }
-
-    @media (max-width: 620px) {
-      body {
-        padding: 0;
-      }
-      .app {
-        width: 100%;
-        min-height: 100vh;
-        border-radius: 0;
-        border: none;
-      }
-      .brand span {
-        display: none;
-      }
-    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#050510;font-family:'Inter',sans-serif;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .container{max-width:420px;width:100%}
+    .logo{width:70px;height:70px;border-radius:20px;border:2px solid #ff3b7f;margin:0 auto 12px;display:block;object-fit:cover}
+    h1{text-align:center;font-size:2rem;font-weight:900;letter-spacing:-1px}
+    h1 span{background:linear-gradient(135deg,#ff3b7f,#b967ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .sub{text-align:center;font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:3px;text-transform:uppercase;margin-bottom:24px}
+    .card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:28px;padding:28px 20px;backdrop-filter:blur(20px)}
+    .status{display:flex;align-items:center;gap:10px;padding:12px;background:rgba(255,255,255,0.02);border-radius:12px;margin-bottom:12px}
+    .dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+    .dot.connected{background:#22c55e;box-shadow:0 0 20px rgba(34,197,94,0.3)}
+    .dot.connecting{background:#f59e0b;box-shadow:0 0 20px rgba(245,158,11,0.3);animation:blink 1s infinite}
+    .dot.disconnected{background:#ef4444;box-shadow:0 0 20px rgba(239,68,68,0.3)}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+    .info-text{font-size:12px;color:rgba(255,255,255,0.4);text-align:center;padding:8px;border-top:1px solid rgba(255,255,255,0.04);margin-top:12px}
+    .info-text .highlight{color:#ff3b7f;font-weight:600}
+    .qr-area{text-align:center;padding:16px 0;}
+    .qr-area img{max-width:200px;border-radius:12px;background:#fff;padding:10px}
+    .qr-placeholder{color:rgba(255,255,255,0.3);padding:20px}
+    
+    .pair-form{display:none;margin-top:12px;padding:16px;background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.06)}
+    .pair-form.show{display:block}
+    .pair-form label{font-size:11px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:6px}
+    .pair-form .input-group{display:flex;gap:8px}
+    .pair-form input{flex:1;padding:10px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.03);color:#fff;font-size:14px;outline:none}
+    .pair-form input:focus{border-color:#ff3b7f}
+    .pair-form .submit-btn{padding:10px 20px;border:none;border-radius:10px;background:linear-gradient(135deg,#ff3b7f,#b967ff);color:#fff;font-weight:600;cursor:pointer}
+    .pair-form .submit-btn:hover{transform:translateY(-2px)}
+    .pair-form .submit-btn:disabled{opacity:0.5;cursor:not-allowed}
+    
+    .pairing-code-box{display:none;margin-top:12px;padding:16px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.06)}
+    .pairing-code-box.show{display:block}
+    .pairing-code-box .code{font-size:28px;font-weight:900;color:#ff3b7f;text-align:center;letter-spacing:6px;font-family:monospace;padding:8px 0}
+    .pairing-code-box .label{font-size:10px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:2px;text-align:center;display:block}
+    .pairing-code-box .copy-btn{background:#ff3b7f;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:600;cursor:pointer;margin-top:8px;width:100%}
+    
+    .btn-group{display:flex;gap:10px;margin-top:12px}
+    .btn{flex:1;padding:12px;border:none;border-radius:12px;font-weight:700;font-size:13px;cursor:pointer;transition:all 0.3s}
+    .btn-primary{background:linear-gradient(135deg,#ff3b7f,#b967ff);color:#fff}
+    .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(255,59,127,0.3)}
+    .btn-secondary{background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.1)}
+    .btn-secondary:hover{background:rgba(255,255,255,0.1)}
+    .btn:disabled{opacity:0.5;cursor:not-allowed}
+    
+    .footer{margin-top:20px;text-align:center;font-size:10px;color:rgba(255,255,255,0.2)}
+    .footer a{color:rgba(255,255,255,0.3);text-decoration:none}
+    .prefix-display{font-size:11px;color:rgba(255,255,255,0.3);text-align:center;margin-top:8px}
+    .hosting-ad{margin-top:12px;padding:12px;background:rgba(255,59,127,0.05);border:1px solid rgba(255,59,127,0.08);border-radius:12px;text-align:center}
+    .hosting-ad .title{color:#ff3b7f;font-weight:700;font-size:12px}
+    .hosting-ad .desc{color:rgba(255,255,255,0.4);font-size:10px;margin-top:4px}
+    .hosting-ad .price{color:#fff;font-weight:600;font-size:11px;margin-top:4px}
+    .hosting-ad .link{color:#b967ff;text-decoration:none;font-size:10px}
+    .hosting-ad .panel{color:rgba(255,255,255,0.3);font-size:10px;margin-top:4px}
   </style>
 </head>
 <body>
-  <main class="app">
-    <header class="topbar">
-      <div class="brand">
-        <i class="fab fa-whatsapp"></i>
-        <span>WhatsApp Bot</span>
-      </div>
-      <div class="status-pill">
-        <span class="status-dot disconnected" id="statusDot"></span>
-        <span id="statusLabel">Disconnected</span>
-      </div>
-    </header>
+    <div class="container">
+        <img src="https://url.bmbxmd.workers.dev/Migo.jpeg" class="logo" onerror="this.style.display='none'">
+        <h1>ᴘᴜssʏ<span>ᴇsᴄᴀᴘᴇ</span></h1>
+        <div class="sub">WhatsApp Bot</div>
+        <div class="card">
+            <div class="status">
+                <span class="dot disconnected" id="statusDot"></span>
+                <span id="statusLabel">Disconnected</span>
+                <span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,0.2);" id="prefixDisplay">Prefix: .</span>
+            </div>
+            
+            <div id="qrSection" class="qr-area">
+                <div id="qrPlaceholder" class="qr-placeholder">
+                    <i class="fa-solid fa-qrcode" style="font-size:48px;display:block;margin-bottom:12px;opacity:0.3;"></i>
+                    <span>QR code will appear here when connecting</span>
+                </div>
+                <img id="qrImage" src="" alt="QR Code" style="display:none;">
+            </div>
 
-    <section class="panel">
-      <div class="panel-head">
-        <div class="panel-title">
-          <i class="fas fa-qrcode"></i> QR Login
-        </div>
-        <div class="tag">
-          <i class="fas fa-mobile-alt"></i> WhatsApp Web
-        </div>
-      </div>
-      <div id="qrArea" class="qr-container">
-        <div class="qr-placeholder" id="qrPlaceholder">
-          <i class="fas fa-spinner fa-pulse"></i>
-          <p>Loading QR code...</p>
-        </div>
-      </div>
-      <div id="statusText" class="loader-text">
-        <i class="fas fa-circle-info"></i>
-        <span>Waiting for connection...</span>
-      </div>
-    </section>
+            <div class="btn-group">
+                <button id="pairBtn" class="btn btn-primary">
+                    <i class="fa-solid fa-key"></i> Pair Code
+                </button>
+                <button id="qrBtn" class="btn btn-secondary">
+                    <i class="fa-solid fa-qrcode"></i> Generate QR
+                </button>
+            </div>
 
-    <section class="panel">
-      <div class="panel-head">
-        <div class="panel-title">
-          <i class="fas fa-key"></i> Pair with Code
-        </div>
-        <div class="tag">Alternative</div>
-      </div>
-      <div class="pairing-form">
-        <label>📱 Phone Number (with country code)</label>
-        <input type="tel" id="phoneNumber" class="pairing-input" placeholder="255620490076" autocomplete="off">
-        <button id="pairBtn" class="btn btn-primary">
-          <i class="fas fa-link"></i> Get Pairing Code
-        </button>
-      </div>
-      <div id="pairingCodeDisplay" style="display: none;" class="pairing-code-box">
-        <i class="fas fa-key" style="color: var(--green); font-size: 1.2rem;"></i>
-        <div>
-          <span id="pairingCode"></span>
-        </div>
-        <small>Enter this code in WhatsApp > Linked Devices > Link with phone number</small>
-      </div>
-    </section>
+            <div id="pairForm" class="pair-form">
+                <label for="phoneInput"><i class="fa-solid fa-phone"></i> Phone Number (with country code)</label>
+                <div class="input-group">
+                    <input type="tel" id="phoneInput" placeholder="255712345678" value="255">
+                    <button id="submitPairBtn" class="submit-btn"><i class="fa-solid fa-link"></i> Generate</button>
+                </div>
+            </div>
 
-    <div class="footer-note">
-      <i class="fas fa-shield-alt"></i>
-      <span>Session stored securely | Auto-reconnect enabled</span>
+            <div id="pairingCodeBox" class="pairing-code-box">
+                <span class="label">Pairing Code</span>
+                <div class="code" id="pairingCodeDisplay">------</div>
+                <button id="copyPairBtn" class="copy-btn"><i class="fa-regular fa-copy"></i> Copy Code</button>
+            </div>
+
+            <div class="info-text">
+                <span id="statusMessage">Bot is <span class="highlight">disconnected</span>. Use Pair Code or QR to connect.</span>
+            </div>
+            <div class="prefix-display">Command prefix: <span id="prefixValue">.</span></div>
+            
+            <div class="hosting-ad">
+                <div class="title">HOST YOUR BOT NOW</div>
+                <div class="desc">Get premium hosting for your WhatsApp bot</div>
+                <div class="price">10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD</div>
+                <div class="panel">Panel & Server Available</div>
+                <a href="https://host.stanymaxhub.online" target="_blank" class="link">host.stanymaxhub.online</a>
+            </div>
+        </div>
+        <div class="footer">
+            Developed by <a href="tel:+255787069580">STANYTZ</a><br>
+            &copy; 2026 ᴘᴜssʏ ᴇsᴄᴀᴘᴇ 😐<br>
+            <a href="https://github.com/Stanytz390/PussyEscape0.0.1" target="_blank" style="color:rgba(255,255,255,0.2);">GitHub Repo</a> | 
+            <a href="https://host.stanymaxhub.online" target="_blank" style="color:rgba(255,255,255,0.2);">Hosting</a>
+        </div>
     </div>
-  </main>
 
-  <script>
-    let refreshInterval = null;
-    let currentQR = null;
+    <script>
+        let refreshInterval = null;
+        let currentPairingCode = null;
+        const phoneInput = document.getElementById('phoneInput');
+        const pairBtn = document.getElementById('pairBtn');
+        const qrBtn = document.getElementById('qrBtn');
+        const submitPairBtn = document.getElementById('submitPairBtn');
+        const pairForm = document.getElementById('pairForm');
+        const pairingCodeBox = document.getElementById('pairingCodeBox');
+        const pairingCodeDisplay = document.getElementById('pairingCodeDisplay');
+        const copyPairBtn = document.getElementById('copyPairBtn');
 
-    function setStatus(status) {
-      const statusElem = document.getElementById('statusLabel');
-      const statusDot = document.getElementById('statusDot');
-      const statusText = document.getElementById('statusText');
-      
-      let statusLabel = '';
-      let dotClass = 'disconnected';
-      let loaderHtml = '';
-      
-      switch(status) {
-        case 'disconnected':
-          statusLabel = 'Disconnected';
-          dotClass = 'disconnected';
-          loaderHtml = '<i class="fas fa-circle-info"></i><span>Bot disconnected. Waiting for reconnection...</span>';
-          break;
-        case 'connecting':
-          statusLabel = 'Connecting';
-          dotClass = 'connecting';
-          loaderHtml = '<span class="spinner"></span><span>Connecting to WhatsApp...</span>';
-          break;
-        case 'connected':
-          statusLabel = 'Connected';
-          dotClass = 'connected';
-          loaderHtml = '<i class="fas fa-check-circle" style="color: #22c55e;"></i><span>Bot is online and ready!</span>';
-          break;
-        default:
-          statusLabel = status;
-          dotClass = 'disconnected';
-      }
-      
-      statusElem.innerText = statusLabel;
-      statusDot.className = 'status-dot ' + dotClass;
-      if (statusText) statusText.innerHTML = loaderHtml;
-    }
-
-    function updateQR(qrData) {
-      const qrArea = document.getElementById('qrArea');
-      if (qrData) {
-        currentQR = qrData;
-        qrArea.innerHTML = \`
-          <div class="qr-wrapper">
-            <img class="qr-img" src="\${qrData}" alt="QR Code">
-          </div>
-          <div class="info-text">
-            <i class="fas fa-camera"></i>
-            <span>Scan with WhatsApp > Linked Devices</span>
-          </div>
-        \`;
-      } else {
-        qrArea.innerHTML = \`
-          <div class="qr-placeholder">
-            <i class="fas fa-qrcode"></i>
-            <p>QR code will appear here when ready</p>
-          </div>
-        \`;
-      }
-    }
-
-    function updatePairingCode(code) {
-      const displayDiv = document.getElementById('pairingCodeDisplay');
-      const codeSpan = document.getElementById('pairingCode');
-      if (code && code !== 'null' && code !== 'undefined') {
-        codeSpan.innerText = code;
-        displayDiv.style.display = 'block';
-      } else {
-        displayDiv.style.display = 'none';
-      }
-    }
-
-    async function fetchStatus() {
-      try {
-        const resp = await fetch('/api/status');
-        if (!resp.ok) throw new Error('Status fetch failed');
-        const data = await resp.json();
-        
-        setStatus(data.status);
-        
-        if (data.qr && data.qr !== currentQR) {
-          updateQR(data.qr);
-        } else if (!data.qr && data.status !== 'connected') {
-          updateQR(null);
+        function setStatus(status, prefix) {
+            const dot = document.getElementById('statusDot');
+            const label = document.getElementById('statusLabel');
+            const msg = document.getElementById('statusMessage');
+            const prefixDisplay = document.getElementById('prefixDisplay');
+            const prefixValue = document.getElementById('prefixValue');
+            
+            dot.className = 'dot ' + status;
+            const names = {connected:'Connected', connecting:'Connecting...', disconnected:'Disconnected'};
+            label.textContent = names[status] || status;
+            
+            if(prefix) {
+                prefixDisplay.textContent = 'Prefix: ' + prefix;
+                prefixValue.textContent = prefix;
+            }
+            
+            if(status === 'connected') {
+                msg.innerHTML = 'Bot is <span class="highlight">connected</span> and ready.';
+                document.getElementById('qrPlaceholder').style.display = 'block';
+                document.getElementById('qrImage').style.display = 'none';
+                pairForm.classList.remove('show');
+            } else if(status === 'connecting') {
+                msg.innerHTML = 'Bot is <span class="highlight">connecting</span>... Please wait.';
+            } else {
+                msg.innerHTML = 'Bot is <span class="highlight">disconnected</span>. Use Pair Code or QR to connect.';
+            }
         }
-        
-        updatePairingCode(data.pairingCode);
-        
-        if (data.status === 'connected') {
-          updateQR(null);
-        }
-      } catch (err) {
-        console.error('Status poll error:', err);
-      }
-    }
 
-    async function requestPairingCode() {
-      const phoneInput = document.getElementById('phoneNumber');
-      const phone = phoneInput.value.trim();
-      const pairBtn = document.getElementById('pairBtn');
-      
-      if (!phone) {
-        alert('Please enter your phone number with country code');
-        return;
-      }
-      
-      if (!phone.match(/^[0-9]{10,15}$/)) {
-        alert('Please enter a valid phone number (numbers only, with country code)');
-        return;
-      }
-      
-      pairBtn.disabled = true;
-      pairBtn.innerHTML = '<span class="spinner"></span><span>Requesting...</span>';
-      
-      try {
-        const formData = new URLSearchParams();
-        formData.append('phone', phone);
-        
-        const resp = await fetch('/pair', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: formData
+        function updateQR(qr) {
+            const img = document.getElementById('qrImage');
+            const placeholder = document.getElementById('qrPlaceholder');
+            if(qr) {
+                img.src = qr;
+                img.style.display = 'block';
+                placeholder.style.display = 'none';
+            } else {
+                img.style.display = 'none';
+                placeholder.style.display = 'block';
+            }
+        }
+
+        function updatePairingCode(code) {
+            if(code && code !== 'null' && code !== 'undefined') {
+                currentPairingCode = code;
+                pairingCodeDisplay.textContent = code;
+                pairingCodeBox.classList.add('show');
+            } else {
+                pairingCodeBox.classList.remove('show');
+            }
+        }
+
+        async function fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                setStatus(data.status, data.prefix);
+                if(data.qr) updateQR(data.qr);
+                else if(data.status === 'connected') updateQR(null);
+                if(data.pairingCode) updatePairingCode(data.pairingCode);
+            } catch(e) { console.error(e); }
+        }
+
+        pairBtn.addEventListener('click', function() {
+            if(pairForm.classList.contains('show')) {
+                pairForm.classList.remove('show');
+            } else {
+                pairForm.classList.add('show');
+                phoneInput.focus();
+            }
         });
+
+        submitPairBtn.addEventListener('click', async function() {
+            const phone = phoneInput.value.trim();
+            if(!phone) {
+                alert('Please enter your phone number with country code (e.g., 255712345678)');
+                return;
+            }
+            if(!phone.match(/^[0-9]{10,15}$/)) {
+                alert('Please enter a valid phone number (numbers only)');
+                return;
+            }
+            
+            this.disabled = true;
+            this.innerHTML = '<i class="fa-solid fa-spinner fa-pulse"></i>';
+            
+            try {
+                const formData = new URLSearchParams();
+                formData.append('phone', phone);
+                const resp = await fetch('/pair', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData
+                });
+                const text = await resp.text();
+                if(resp.ok && text.includes('Pairing Code Generated')) {
+                    fetchStatus();
+                    setTimeout(() => fetchStatus(), 2000);
+                    setTimeout(() => fetchStatus(), 5000);
+                    pairForm.classList.remove('show');
+                } else {
+                    alert('Failed to generate pairing code. Make sure bot is connecting.');
+                }
+            } catch(err) {
+                alert('Error: ' + err.message);
+            }
+            this.disabled = false;
+            this.innerHTML = '<i class="fa-solid fa-link"></i> Generate';
+        });
+
+        phoneInput.addEventListener('keypress', function(e) {
+            if(e.key === 'Enter') submitPairBtn.click();
+        });
+
+        qrBtn.addEventListener('click', function() {
+            fetchStatus();
+            alert('QR code will appear automatically when bot is in connecting state.');
+        });
+
+        copyPairBtn.addEventListener('click', async function() {
+            const text = pairingCodeDisplay.textContent;
+            if(!text || text === '------') return;
+            try {
+                await navigator.clipboard.writeText(text);
+                this.innerHTML = '<i class="fa-regular fa-check"></i> Copied!';
+                setTimeout(() => {
+                    this.innerHTML = '<i class="fa-regular fa-copy"></i> Copy Code';
+                }, 3000);
+            } catch(err) {
+                const range = document.createRange();
+                range.selectNode(pairingCodeDisplay);
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                document.execCommand('copy');
+                this.innerHTML = '<i class="fa-regular fa-check"></i> Copied!';
+                setTimeout(() => {
+                    this.innerHTML = '<i class="fa-regular fa-copy"></i> Copy Code';
+                }, 3000);
+            }
+        });
+
+        refreshInterval = setInterval(fetchStatus, 3000);
+        fetchStatus();
         
-        const text = await resp.text();
-        if (resp.ok && text.includes('Pairing Code Generated')) {
-          fetchStatus();
-          setTimeout(() => fetchStatus(), 2000);
-        } else {
-          alert('Failed to get pairing code. Make sure bot is connecting first.');
-        }
-      } catch (err) {
-        alert('Error: ' + err.message);
-      } finally {
-        pairBtn.disabled = false;
-        pairBtn.innerHTML = '<i class="fas fa-link"></i> Get Pairing Code';
-      }
-    }
-    
-    document.getElementById('pairBtn').addEventListener('click', requestPairingCode);
-    document.getElementById('phoneNumber').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') requestPairingCode();
-    });
-    
-    refreshInterval = setInterval(fetchStatus, 2000);
-    fetchStatus();
-    
-    window.addEventListener('beforeunload', () => {
-      if (refreshInterval) clearInterval(refreshInterval);
-    });
-  </script>
+        window.addEventListener('beforeunload', () => { 
+            if(refreshInterval) clearInterval(refreshInterval); 
+        });
+    </script>
 </body>
 </html>`);
     } 
     
-    else if (url === '/pair' && req.method === 'GET') {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body { font-family: Arial; padding: 20px; text-align: center; }
-        form { margin: 20px; padding: 20px; background: #f0f0f0; display: inline-block; }
-        input, button { padding: 10px; margin: 5px; }
-    </style>
-</head>
-<body>
-    <h1>🔗 Pair WhatsApp</h1>
-    <form method="POST">
-        Phone: <input type="text" name="phone" placeholder="911234567890" required><br><br>
-        <button type="submit">Get Code</button><br><br>
-        <a href="/">← Back</a>
-    </form>
-</body>
-</html>`);
-    }
-    
+    // ===== PAIR API =====
     else if (url === '/pair' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -984,7 +797,7 @@ const server = http.createServer((req, res) => {
                 
                 if (!phoneNumber) {
                     res.writeHead(200, { 'Content-Type': 'text/html' });
-                    res.end(`<center><h2>❌ Error: Phone number required</h2><a href="/pair">Try Again</a></center>`);
+                    res.end('<center><h2>Error: Phone number required</h2><a href="/">Try Again</a></center>');
                     return;
                 }
 
@@ -992,7 +805,7 @@ const server = http.createServer((req, res) => {
                 
                 if (botStatus !== 'connecting' || !sock) {
                     res.writeHead(200, { 'Content-Type': 'text/html' });
-                    res.end(`<center><h2>⚠️ Bot not ready</h2><p>Status: ${botStatus}</p><p>Please wait for QR code to appear first</p><a href="/">← Go Back</a></center>`);
+                    res.end('<center><h2>Bot not ready</h2><p>Status: ' + botStatus + '</p><p>Please wait for QR code to appear first</p><a href="/">Go Back</a></center>');
                     return;
                 }
 
@@ -1008,35 +821,53 @@ const server = http.createServer((req, res) => {
 <html>
 <head>
     <style>
-        body { font-family: Arial; padding: 20px; text-align: center; }
-        .code { font-size: 2em; color: green; font-weight: bold; margin: 20px; }
-        .info { background: #e8f5e8; padding: 15px; margin: 20px; border-radius: 5px; }
+        body{font-family:Inter,sans-serif;background:#050510;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;margin:0}
+        .card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:32px;padding:40px;max-width:420px;width:100%;text-align:center}
+        .code{font-size:36px;font-weight:900;background:linear-gradient(135deg,#ff3b7f,#b967ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:8px;font-family:monospace;margin:20px 0}
+        .btn{display:inline-block;padding:12px 32px;background:linear-gradient(135deg,#ff3b7f,#b967ff);color:#fff;border-radius:16px;text-decoration:none;font-weight:600;margin:10px 5px;border:none;cursor:pointer}
+        .btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(255,59,127,0.3)}
+        .hint{color:rgba(255,255,255,0.5);font-size:13px;margin-top:16px}
+        .hosting-ad{margin-top:16px;padding:12px;background:rgba(255,59,127,0.05);border-radius:12px}
+        .hosting-ad .title{color:#ff3b7f;font-weight:700;font-size:12px}
+        .hosting-ad .price{color:#fff;font-size:11px}
+        .hosting-ad .panel{color:rgba(255,255,255,0.3);font-size:10px;margin-top:4px}
+        .hosting-ad .link{color:#b967ff;text-decoration:none;font-size:10px}
     </style>
 </head>
 <body>
-    <h1>✅ Pairing Code Generated</h1>
-    <h2>Phone: ${phoneNumber}</h2>
-    <div class="code">Code: ${pairingCode}</div>
-    <div class="info">
-        <p>📱 Go to WhatsApp > Settings > Linked Devices > Link a Device</p>
-        <p>🔢 Select "Use pairing code" and enter the code above</p>
+    <div class="card">
+        <h2 style="color:#ff3b7f;margin-bottom:10px;">Pairing Code Generated</h2>
+        <p style="color:rgba(255,255,255,0.6);font-size:14px;">Phone: <strong style="color:#fff;">${phoneNumber}</strong></p>
+        <div class="code">${pairingCode}</div>
+        <div style="background:rgba(255,255,255,0.03);border-radius:12px;padding:12px;margin:16px 0;border:1px solid rgba(255,255,255,0.04);">
+            <p style="font-size:13px;color:rgba(255,255,255,0.6);">Open WhatsApp -> Settings -> Linked Devices -> Link a Device</p>
+            <p style="font-size:13px;color:rgba(255,255,255,0.6);">Select "Use pairing code" and enter the code above</p>
+        </div>
+        <button class="btn" onclick="navigator.clipboard.writeText('${pairingCode}').then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy Code';},2000)})">Copy Code</button>
+        
+        <div class="hosting-ad">
+            <div class="title">HOST YOUR BOT NOW</div>
+            <div class="price">10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD</div>
+            <div class="panel">Panel & Server Available</div>
+            <a href="https://host.stanymaxhub.online" target="_blank" class="link">host.stanymaxhub.online</a>
+        </div>
+        
+        <br>
+        <a href="/" style="color:rgba(255,255,255,0.4);text-decoration:none;font-size:13px;">Back to Home</a>
     </div>
-    <br>
-    <a href="/">🏠 Home</a> | <a href="/pair">🔄 Pair Another</a>
 </body>
 </html>`);
-
-                console.log(`✅ Pairing code for ${phoneNumber}: ${pairingCode}`);
-                
+                console.log('Pairing code for ' + phoneNumber + ': ' + pairingCode);
             } catch (error) {
-                console.error('❌ Pair error:', error);
+                console.error('Pair error:', error);
                 res.writeHead(200, { 'Content-Type': 'text/html' });
-                res.end(`<center><h2>❌ Error</h2><p>${error.message}</p><p>Make sure the phone number is in international format (e.g., 911234567890)</p><a href="/pair">↩️ Try Again</a></center>`);
+                res.end('<center><h2>Error</h2><p>' + error.message + '</p><a href="/">Try Again</a></center>');
             }
         });
         return;
     }
     
+    // ===== API STATUS =====
     else if (url === '/api/status') {
         let pairingCode = null;
         for (const [_, data] of pairingCodes) {
@@ -1055,7 +886,7 @@ const server = http.createServer((req, res) => {
             hasQR: !!latestQR,
             qr: latestQR,
             pairingCode: pairingCode,
-            prefix: global.BOT_PREFIX,
+            prefix: global.BOT_PREFIX || '.',
             timestamp: new Date().toISOString(),
             uptime: process.uptime()
         }));
@@ -1063,27 +894,27 @@ const server = http.createServer((req, res) => {
     
     else {
         res.writeHead(404, { 'Content-Type': 'text/html' });
-        res.end(`<center><h1>404 - Page Not Found</h1><a href="/">🏠 Go Home</a></center>`);
+        res.end('<center><h1>404 - Page Not Found</h1><a href="/">Go Home</a></center>');
     }
 });
 
 server.listen(PORT, () => {
-    console.log(`🌐 Web server running at http:
-    console.log(`📁 Session folder: ${path.resolve(AUTH_FOLDER)}`);
+    console.log('Web server running at http://localhost:' + PORT);
+    console.log('Session folder: ' + path.resolve(AUTH_FOLDER));
     loadPrefix();
 });
 
 process.on('SIGINT', () => {
-    console.log('\n👋 Shutting down gracefully...');
+    console.log('\nShutting down gracefully...');
     if (presenceInterval) clearInterval(presenceInterval);
     if (sock) sock.end();
     process.exit(0);
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('⚠️ Uncaught Exception:', err);
+    console.error('Uncaught Exception:', err);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('⚠️ Unhandled Rejection:', reason);
+    console.error('Unhandled Rejection:', reason);
 });
