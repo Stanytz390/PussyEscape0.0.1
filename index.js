@@ -194,7 +194,7 @@ Panel & Server Available.
 =======================`;
 
         await sock.sendMessage(sock.user.id, {
-            image: { url: 'https://url.bmbxmd.workers.dev/Migo.jpeg' },
+            image: { url: 'https://www.image2url.com/r2/default/images/1785627507276-a309afa4-8e3b-447e-bf3a-403bacf0993d.jpeg' },
             caption: welcomeText,
             contextInfo: {
                 mentionedJid: [sock.user.id],
