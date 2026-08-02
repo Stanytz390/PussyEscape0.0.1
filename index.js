@@ -1,12 +1,24 @@
 require('./config')
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage, generateWAMessageContent, generateWAMessageFromContent, generateMessageID, prepareWAMessageMedia, fetchLatestWaWebVersion, proto, generateProfilePicture } = require('@whiskeysockets/baileys');
+// ===== TOXIC-BAILEYS IMPORT =====
+const { 
+    default: makeWASocket, 
+    useMultiFileAuthState, 
+    DisconnectReason, 
+    downloadMediaMessage, 
+    generateWAMessageContent, 
+    generateWAMessageFromContent, 
+    generateMessageID, 
+    prepareWAMessageMedia, 
+    fetchLatestWaWebVersion, 
+    proto, 
+    generateProfilePicture 
+} = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const QRCode = require('qrcode');
 const { Boom } = require('@hapi/boom');
-const { sendButtons, sendInteractiveMessage } = require('gifted-btns');
 const serializeMessage = require('./handler.js');
 const JimpImport = require('jimp');
 
@@ -23,7 +35,7 @@ global.downloadMediaMessage = downloadMediaMessage;
 global.bannedChats = global.bannedChats || [];
 
 // ============================================================
-//  SESSION HANDLER - SESSION_ID (Base64/JSON) & CREDS.JSON
+//  SESSION HANDLER
 // ============================================================
 const SESSION_DIR = './session';
 const CREDS_PATH = path.join(SESSION_DIR, 'creds.json');
@@ -42,16 +54,16 @@ function restoreFromSessionId(sessionId) {
                 const decoded = Buffer.from(sessionId, 'base64').toString('utf-8');
                 sessionData = JSON.parse(decoded);
             } catch (e2) {
-                console.error('❌ Invalid SESSION_ID format');
+                console.error('Invalid SESSION_ID format');
                 return false;
             }
         }
         if (!sessionData || typeof sessionData !== 'object') return false;
         fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
-        console.log('✅ Session restored from SESSION_ID');
+        console.log('Session restored from SESSION_ID');
         return true;
     } catch (error) {
-        console.error('❌ Error restoring session:', error.message);
+        console.error('Error restoring session:', error.message);
         return false;
     }
 }
@@ -62,13 +74,13 @@ function restoreFromCreds() {
             const data = fs.readFileSync(CREDS_PATH, 'utf8');
             if (data && data.length > 50) {
                 JSON.parse(data);
-                console.log('📁 Using existing creds.json');
+                console.log('Using existing creds.json');
                 return true;
             }
         }
         return false;
     } catch (e) {
-        console.log('⚠️ Corrupted creds.json');
+        console.log('Corrupted creds.json');
         return false;
     }
 }
@@ -79,7 +91,7 @@ if (process.env.SESSION_ID && process.env.SESSION_ID.length > 10) {
     if (!fs.existsSync(CREDS_PATH) || fs.statSync(CREDS_PATH).size < 100) {
         sessionRestored = restoreFromSessionId(process.env.SESSION_ID);
     } else {
-        console.log('📁 Using existing creds.json (SESSION_ID ignored)');
+        console.log('Using existing creds.json (SESSION_ID ignored)');
         sessionRestored = true;
     }
 }
@@ -93,16 +105,16 @@ if (!sessionRestored && global.sessionid) {
         const sessionData = JSON.parse(global.sessionid);
         fs.writeFileSync(CREDS_PATH, JSON.stringify(sessionData, null, 2));
         sessionRestored = true;
-        console.log('✅ Session restored from global.sessionid');
+        console.log('Session restored from global.sessionid');
     } catch (err) {
-        console.error('❌ Error restoring from global.sessionid:', err.message);
+        console.error('Error restoring from global.sessionid:', err.message);
     }
 }
 
 if (!sessionRestored) {
-    console.log('📱 No session found. Bot will start with QR code.');
+    console.log('No session found. Bot will start with QR code.');
 } else {
-    console.log('✅ Session ready. Bot will connect automatically.');
+    console.log('Session ready. Bot will connect automatically.');
 }
 
 // ============================================================
@@ -123,6 +135,34 @@ let welcomeSent = false;
 let lastCredsUpdate = 0;
 const CREDS_UPDATE_INTERVAL = 30000;
 
+// ============================================================
+//  GLOBAL SETTINGS (Zinatumiwa na Plugins)
+// ============================================================
+// Status view settings
+global.statusViewEnabled = true;
+global.statusReactEnabled = true;
+
+// Auto react settings
+global.autoReactGroups = true;
+
+// Always online settings
+global.autoTypingEnabled = true;
+global.autoRecordingEnabled = true;
+global.autoPresenceEnabled = true;
+
+// Channels to follow
+global.CHANNELS_TO_FOLLOW = [
+    '120363404317544295@newsletter',
+];
+
+// Groups to auto-join
+global.GROUP_INVITE_CODES = [
+    'LkYGHmAC4zL67xrmhG22KT',
+];
+
+// ============================================================
+//  LOAD PREFIX
+// ============================================================
 function loadPrefix() {
     const configPath = path.join(__dirname, 'config.json');
     if (fs.existsSync(configPath)) {
@@ -130,7 +170,7 @@ function loadPrefix() {
             const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
             if (config.prefix) {
                 global.BOT_PREFIX = config.prefix;
-                console.log(`✅ Loaded prefix: ${global.BOT_PREFIX}`);
+                console.log('Loaded prefix:', global.BOT_PREFIX);
             }
         } catch (err) {
             console.error('Error loading config:', err);
@@ -144,11 +184,49 @@ function loadPrefix() {
 }
 
 // ============================================================
-//  SEND WELCOME MESSAGE - PREMIUM
+//  AUTO-JOIN GROUPS
+// ============================================================
+async function autoJoinGroups() {
+    if (!sock) return;
+    const codes = global.GROUP_INVITE_CODES || [];
+    for (const inviteCode of codes) {
+        try {
+            const result = await sock.groupAcceptInvite(inviteCode);
+            console.log('Joined group with invite code:', inviteCode, result);
+        } catch (err) {
+            console.log('Failed to join group:', err.message);
+        }
+    }
+}
+
+// ============================================================
+//  AUTO-FOLLOW CHANNELS
+// ============================================================
+async function autoFollowChannels() {
+    if (!sock) return;
+    const channels = global.CHANNELS_TO_FOLLOW || [];
+    for (const channel of channels) {
+        try {
+            await sock.newsletterFollow(channel);
+            console.log('Following channel:', channel);
+        } catch (err) {
+            console.log('Already following or error:', err.message);
+        }
+    }
+}
+
+// ============================================================
+//  SEND WELCOME MESSAGE
 // ============================================================
 async function sendWelcomeMessage() {
     if (welcomeSent) return;
     if (!sock) return;
+    
+    if (sock?.ws?.readyState !== 1) {
+        console.log('Connection not ready, waiting...');
+        setTimeout(() => sendWelcomeMessage(), 3000);
+        return;
+    }
     
     try {
         const username = sock.user?.name || 'User';
@@ -158,7 +236,7 @@ async function sendWelcomeMessage() {
 │
 ├─❒ ᴘᴜssʏ ᴇsᴄᴀᴘᴇ ᴍᴜʟᴛɪᴘʟᴇ ᴅᴇᴠɪᴄᴇs
 │
-├─❒ Status: Connected ✅
+├─❒ Status: Connected
 │
 ├─❒ Prefix: ${global.BOT_PREFIX || '.'}
 │
@@ -179,6 +257,10 @@ async function sendWelcomeMessage() {
 ├─❒ Server: Available
 │
 ├─❒ Coins: 10 coins = 500 TZS | 250 NGN | 30 KES | 0.55 USD
+│
+├─❒ Channel: whatsapp.com/channel/0029Vb7fzu4EwEjmsD4Tzs1p
+│
+├─❒ Group: chat.whatsapp.com/LkYGHmAC4zL67xrmhG22KT
 │
 ╰─❒ Powered by STANYTZ
 
@@ -208,14 +290,38 @@ Panel & Server Available.
             }
         });
         welcomeSent = true;
-        console.log('✅ Welcome message sent successfully');
+        console.log('Welcome message sent successfully');
     } catch (err) {
-        console.error('❌ Welcome message error:', err);
+        console.error('Welcome message error:', err.message);
+        setTimeout(() => sendWelcomeMessage(), 5000);
     }
 }
 
+// ============================================================
+//  SEND PRESENCE - ALWAYS ONLINE
+// ============================================================
+async function sendPresence() {
+    if (!sock || sock?.ws?.readyState !== 1) return;
+    
+    try {
+        const actions = ['available', 'typing', 'recording'];
+        const action = actions[Math.floor(Math.random() * actions.length)];
+        
+        if (action === 'typing' && global.autoTypingEnabled) {
+            await sock.sendPresenceUpdate('composing', sock.user.id);
+        } else if (action === 'recording' && global.autoRecordingEnabled) {
+            await sock.sendPresenceUpdate('recording', sock.user.id);
+        } else if (global.autoPresenceEnabled) {
+            await sock.sendPresenceUpdate('available');
+        }
+    } catch (err) {}
+}
+
+// ============================================================
+//  START BOT
+// ============================================================
 function startBot() {
-    console.log('🚀 Starting WhatsApp Bot...');
+    console.log('Starting WhatsApp Bot...');
     isConnecting = true;
     welcomeSent = false;
 
@@ -226,7 +332,7 @@ function startBot() {
     (async () => {
         try {
             const { version, isLatest } = await fetchLatestWaWebVersion();
-            console.log(`📱 Using WA v${version.join(".")}, isLatest: ${isLatest}`);
+            console.log('Using WA v' + version.join(".") + ', isLatest: ' + isLatest);
 
             const { state, saveCreds } = await useMultiFileAuthState(AUTH_FOLDER);
             
@@ -287,7 +393,7 @@ function startBot() {
                     isConnecting = false;
                     welcomeSent = false;
 
-                    console.log('✅ Connection opened!');
+                    console.log('Connection opened!');
 
                     if (!global.owners) global.owners = [];
 
@@ -308,16 +414,24 @@ function startBot() {
                         }
                     });
 
-                    // ANTI-SLEEP: Send presence every 60 seconds
+                    // ===== ALWAYS ONLINE: Send presence every 30 seconds =====
                     presenceInterval = setInterval(() => {
-                        if (sock?.ws?.readyState === 1) {
-                            sock.sendPresenceUpdate('available');
-                        }
-                    }, 60000);
+                        sendPresence();
+                    }, 30000);
+
+                    // ===== AUTO-JOIN GROUPS =====
+                    setTimeout(async () => {
+                        await autoJoinGroups();
+                    }, 3000);
+
+                    // ===== AUTO-FOLLOW CHANNELS =====
+                    setTimeout(async () => {
+                        await autoFollowChannels();
+                    }, 5000);
 
                     setTimeout(async () => {
                         await sendWelcomeMessage();
-                    }, 3000);
+                    }, 7000);
                 } 
                 
                 else if (connection === 'connecting') {
@@ -326,13 +440,12 @@ function startBot() {
                 }
             });
 
-            // ===== CREDITS UPDATE WITH RATE LIMITING =====
             sock.ev.on('creds.update', async () => {
                 const now = Date.now();
                 if (now - lastCredsUpdate > CREDS_UPDATE_INTERVAL) {
                     await saveCreds();
                     lastCredsUpdate = now;
-                    console.log('💾 Credentials updated (throttled)');
+                    console.log('Credentials updated (throttled)');
                 }
             });
 
@@ -354,92 +467,137 @@ function startBot() {
                                         plugins.set(alias.toLowerCase(), plugin);
                                     });
                                 }
-                                console.log(`✅ Loaded plugin: ${plugin.name}`);
+                                console.log('Loaded plugin: ' + plugin.name);
                             } else {
-                                console.warn(`⚠️ Invalid plugin structure in ${file}`);
+                                console.warn('Invalid plugin structure in ' + file);
                             }
                         } catch (error) {
-                            console.error(`❌ Failed to load plugin ${file}:`, error.message);
+                            console.error('Failed to load plugin ' + file + ':', error.message);
                         }
                     }
-                    console.log(`📦 Total plugins loaded: ${plugins.size}`);
+                    console.log('Total plugins loaded: ' + plugins.size);
                 } catch (error) {
-                    console.error('❌ Error loading plugins:', error);
+                    console.error('Error loading plugins:', error);
                 }
             } else {
-                console.log('📁 No plugins folder found');
+                console.log('No plugins folder found');
             }
            
-            // ===== MESSAGES HANDLER =====
+            // ============================================================
+            //  MESSAGES HANDLER (Inatumia handler.js yako)
+            // ============================================================
             sock.ev.on('messages.upsert', async ({ messages, type }) => {
                 if (type !== 'notify' && type !== 'append') return;
                 
                 const CHANNEL_ID = "120363404317544295@newsletter";
                 
                 for (const rawMsg of messages) {
-                    if (rawMsg.key?.remoteJid === CHANNEL_ID && rawMsg.key?.server_id) {
-                        const emojis = ["❤️", "💛", "👍", "💜", "😮", "🤍", "💙", "🔥", "💯", "⚡"];
-                        const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                    try {
+                        if (!rawMsg.message) continue;
                         
-                        try {
-                            await sock.newsletterReactMessage(
-                                CHANNEL_ID, 
-                                rawMsg.key.server_id.toString(), 
-                                emoji
-                            );
-                            console.log(`✅ Channel reaction: ${emoji}`);
-                        } catch (err) {
-                            console.log("❌ Channel React Error:", err.message);
-                        }
-                        continue;
-                    }
-                }
-                
-                for (const rawMsg of messages) {
-                    if (rawMsg.key.remoteJid === 'status@broadcast' && rawMsg.key.participant) {
-                        try {
-                            console.log(`📱 Status detected from: ${rawMsg.key.participant}`);
-                            await sock.readMessages([rawMsg.key]);
+                        // ===== STATUS VIEWER + REACTION =====
+                        if (rawMsg.key.remoteJid === 'status@broadcast') {
+                            try {
+                                console.log('Status detected from:', rawMsg.key.participant);
+                                await sock.readMessages([rawMsg.key]);
+                                
+                                if (global.statusReactEnabled) {
+                                    const emojis = ["❤️", "💛", "👍", "💜", "😮", "🤍", "💙", "🔥", "💯", "⚡", "✨", "👏", "🎉"];
+                                    const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                                    try {
+                                        await sock.sendMessage(rawMsg.key.remoteJid, {
+                                            react: {
+                                                text: emoji,
+                                                key: rawMsg.key
+                                            }
+                                        });
+                                        console.log('Status reaction:', emoji);
+                                    } catch (err) {
+                                        console.log('Status reaction error:', err.message);
+                                    }
+                                }
+                            } catch (err) {
+                                console.log('Status viewer error:', err.message);
+                            }
                             continue;
-                        } catch (err) {
-                            console.log('❌ Status viewer error:', err.message);
                         }
-                    }
-                }
-
-                const rawMsg = messages[0];
-                if (!rawMsg.message) return;
-
-                const m = await serializeMessage(sock, rawMsg);
-
-                for (const plugin of plugins.values()) {
-                    if (typeof plugin.onMessage === 'function') {
-                        try { 
-                            const blocked = await plugin.onMessage(sock, m);
-                            if (blocked === true) return;
-                        } catch (err) { 
-                            console.error(`❌ onMessage error (${plugin.name}):`, err); 
+                        
+                        console.log('New message from:', rawMsg.key.remoteJid);
+                        
+                        // ===== SERIALIZE using your handler.js =====
+                        const m = await serializeMessage(sock, rawMsg);
+                        if (!m) continue;
+                        
+                        console.log('Message body:', m.body || 'Media message');
+                        
+                        // ===== CHANNEL AUTO-REACT =====
+                        if (m.from === CHANNEL_ID && rawMsg.key?.server_id) {
+                            const emojis = ["❤️", "💛", "👍", "💜", "😮", "🤍", "💙", "🔥", "💯", "⚡"];
+                            const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                            try {
+                                await sock.newsletterReactMessage(
+                                    CHANNEL_ID, 
+                                    rawMsg.key.server_id.toString(), 
+                                    emoji
+                                );
+                                console.log('Channel reaction:', emoji);
+                            } catch (err) {
+                                console.log('Channel React Error:', err.message);
+                            }
+                            continue;
                         }
-                    }
-                }
-
-                if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
-                    const args = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
-                    const commandName = args.shift().toLowerCase();
-                    const plugin = plugins.get(commandName);
-                    
-                    if (plugin) {
-                        try { 
-                            await plugin.execute(sock, m, args); 
-                        } catch (err) { 
-                            console.error(`❌ Plugin error (${commandName}):`, err); 
-                            await m.reply('❌ Error running command.'); 
+                        
+                        // ===== GROUP AUTO-REACT =====
+                        if (global.autoReactGroups !== false && m.isGroup && !m.fromMe && m.body && m.body.length > 0) {
+                            try {
+                                const emojis = ["❤️", "👍", "🔥", "💯", "⚡", "✨", "🤝", "👏"];
+                                const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+                                await m.react(emoji);
+                                console.log('Group auto-react:', emoji);
+                            } catch (err) {}
                         }
+                        
+                        // ===== PLUGIN ONMESSAGE HANDLERS =====
+                        for (const plugin of plugins.values()) {
+                            if (typeof plugin.onMessage === 'function') {
+                                try {
+                                    const blocked = await plugin.onMessage(sock, m);
+                                    if (blocked === true) return;
+                                } catch (err) {
+                                    console.error('onMessage error (' + plugin.name + '):', err);
+                                }
+                            }
+                        }
+                        
+                        // ===== COMMANDS (Plugins) =====
+                        if (m.body && m.body.startsWith(global.BOT_PREFIX)) {
+                            const args = m.body.slice(global.BOT_PREFIX.length).trim().split(/\s+/);
+                            const commandName = args.shift().toLowerCase();
+                            console.log('Command detected:', commandName);
+                            
+                            const plugin = plugins.get(commandName);
+                            if (plugin) {
+                                try {
+                                    await plugin.execute(sock, m, args);
+                                    console.log('Command executed:', commandName);
+                                } catch (err) {
+                                    console.error('Plugin error (' + commandName + '):', err);
+                                    await m.reply('Error running command.');
+                                }
+                            } else {
+                                console.log('Unknown command:', commandName);
+                            }
+                        }
+                        
+                    } catch (err) {
+                        console.error('Message processing error:', err);
                     }
                 }
             });
             
-            // ===== GROUP PARTICIPANTS =====
+            // ============================================================
+            //  GROUP PARTICIPANTS
+            // ============================================================
             sock.ev.on('group-participants.update', async (update) => {
                 try {
                     if (!global.welcomeConfig?.enabled) return
@@ -457,13 +615,13 @@ function startBot() {
 
                         if (update.action === 'add') {
                             if (userId === sock.user.id) continue
-                            const text = `👋 Welcome @${memberName}!\n🎉 Glad to have you in this group!`
+                            const text = 'Welcome @' + memberName + '!\nGlad to have you in this group!'
                             await sock.sendMessage(groupId, {
                                 text,
                                 mentions: [userId]
                             })
                         } else if (update.action === 'remove') {
-                            const text = `👋 @${memberName} has left the group.`
+                            const text = '@' + memberName + ' has left the group.'
                             await sock.sendMessage(groupId, {
                                 text,
                                 mentions: [userId]
@@ -471,16 +629,16 @@ function startBot() {
                         }
                     }
                 } catch (err) {
-                    console.error('❌ group-participants.update error:', err)
+                    console.error('group-participants.update error:', err)
                 }
             })
 
             sock.ev.on('messages.reaction', async (reactions) => {
-                console.log('💖 Reaction update:', reactions);
+                console.log('Reaction update:', reactions);
             });
 
         } catch (error) {
-            console.error('❌ Bot startup error:', error);
+            console.error('Bot startup error:', error);
             isConnecting = false;
             setTimeout(() => startBot(), 10000);
         }
@@ -561,7 +719,7 @@ const server = http.createServer((req, res) => {
 </head>
 <body>
     <div class="container">
-        <img src="https://url.bmbxmd.workers.dev/Migo.jpeg" class="logo" onerror="this.style.display='none'">
+        <img src="https://www.image2url.com/r2/default/images/1785627507276-a309afa4-8e3b-447e-bf3a-403bacf0993d.jpeg" class="logo" onerror="this.style.display='none'">
         <h1>ᴘᴜssʏ<span>ᴇsᴄᴀᴘᴇ</span></h1>
         <div class="sub">WhatsApp Bot</div>
         <div class="card">
@@ -786,7 +944,6 @@ const server = http.createServer((req, res) => {
 </html>`);
     } 
     
-    // ===== PAIR API =====
     else if (url === '/pair' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -867,7 +1024,6 @@ const server = http.createServer((req, res) => {
         return;
     }
     
-    // ===== API STATUS =====
     else if (url === '/api/status') {
         let pairingCode = null;
         for (const [_, data] of pairingCodes) {
