@@ -6,17 +6,17 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
-    "stop": "pm2 stop Xlicon",
-    "restart": "pm2 restart Xlicon",
+    "stop": "pm2 stop stanytz",
+    "restart": "pm2 restart stanytz",
     "bot": "node index.js"
   },
-  "author": "Xlicon",
+  "author": "Stanytz390",
   "license": "MIT",
-  "private": true,
+  "private": "false",
   "keywords": [
     "whatsapp-bot",
     "baileys",
-    "xlicon"
+    "stanytz"
   ],
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
